@@ -1,7 +1,4 @@
 #include "storage_mgr.h"
-
-#include <io.h>
-
 #include "dberror.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,7 +75,8 @@ RC closePageFile(SM_FileHandle *fHandle) {
     //     RC_message = "Error closing file";
     //     return RC_message;
     // }
-    fclose(fHandle -> fileName);
+    // fclose(fHandle -> fileName);
+    fclose(fHandle -> mgmtInfo);
     perror("fclose");
     return RC_OK;
 }
