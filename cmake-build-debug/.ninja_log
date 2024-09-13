@@ -1,0 +1,5 @@
+# ninja log v6
+1	72	1726202814990483400	CMakeFiles/assign_1.dir/dberror.c.o	56211943861dcc68
+1	93	1726202814990483400	CMakeFiles/assign_1.dir/test_assign1_1.c.o	2503283cb6ccd422
+1	49	1726203204891949500	CMakeFiles/assign_1.dir/storage_mgr.c.o	504414980bc23977
+49	70	1726203204938615900	assign_1	665410cf19ad8887
