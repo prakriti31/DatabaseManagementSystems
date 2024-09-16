@@ -47,6 +47,7 @@ main (void)
 
 /* check a return code. If it is not RC_OK then output a message, error description, and exit */
 /* Try to create, open, and close a page file */
+
 void
 testCreateOpenClose(void)
 {
@@ -183,6 +184,7 @@ testReadLastBlock(void)
   TEST_DONE();
 }
 
+/* Try reading beyond End of the file (beyond last page of the file) */
 void
 testReadBeyondEOF(void)
 {
@@ -204,6 +206,7 @@ testReadBeyondEOF(void)
   TEST_CHECK(closePageFile(&fh));
   TEST_CHECK(destroyPageFile(TESTPF));
 
+  // Free allocated memory
   free(ph);
   TEST_DONE();
 }
