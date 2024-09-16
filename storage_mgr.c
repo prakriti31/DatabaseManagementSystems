@@ -30,19 +30,16 @@ RC createPageFile(char *fileName) {
 RC openPageFile(char *fileName, SM_FileHandle *fHandle) {
     // Try opening the file in read binary mode
     FILE *page = fopen(fileName, "rb");
-    perror("fopen");
+    // perror("fopen");
     if (page == NULL) {
         printf("Error: File '%s' not found.\n", fileName);
         return RC_FILE_NOT_FOUND;  // Return "file not found" if open fails
     }
     else {
         // File opened successfully
-        // printf("File '%s' opened successfully.\n", fileName);
         fseek(page, 0, SEEK_END);
         long fileSize = ftell(page);
-        // printf("File size is %ld\n", fileSize);
         int no_of_pages = fileSize / PAGE_SIZE;
-        // printf("Number of pages = %d\n", no_of_pages);
         fHandle -> fileName = fileName;
         fHandle -> curPagePos = 0;
         fHandle -> totalNumPages = no_of_pages;
@@ -55,35 +52,21 @@ RC openPageFile(char *fileName, SM_FileHandle *fHandle) {
 }
 
 RC closePageFile(SM_FileHandle *fHandle) {
-    printf("Inside closePageFile()\n");
+    // printf("Inside closePageFile()\n");
 
     // Check if SM_FileHandle -> fileName is not empty to validate that file was opened.
 
     if(fHandle -> fileName == NULL) {
         printf("Error: File '%s' not found.\n", fHandle -> fileName);
     }
-
-    // Open file before closing it :/
-    // mode = 'rb' and not 'r' because the file is a .bin file
-    // 'r' is used to read text files, 'rb' for rest of the files.
-
-    // FILE *file = fopen(fHandle -> fileName, "rb");
-    // if(file == NULL) {
-    //     return RC_FILE_NOT_FOUND;
-    // }
-    // if(fclose(file) !=0 ) {
-    //     RC_message = "Error closing file";
-    //     return RC_message;
-    // }
-    // fclose(fHandle -> fileName);
     fclose(fHandle -> mgmtInfo);
-    perror("fclose");
+    // perror("fclose");
     return RC_OK;
 }
 
 RC destroyPageFile(char *fileName) {
     if(remove(fileName) == 0) return RC_OK;
-    perror("Error destroying file");
+    // perror("Error destroying file");
     return RC_FILE_NOT_FOUND;
 
 }
