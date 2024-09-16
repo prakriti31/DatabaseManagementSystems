@@ -14,6 +14,10 @@ void initStorageManager(void) {
     printf("Storage manager init.\n");
 }
 RC createPageFile(char *fileName) {
+    /*
+     * This function creates a File first, then writes '/0' bytes
+     * 
+     */
     FILE *file = fopen(fileName, "w");   // "w" creates file if it doesn't exist and truncates the file if it exists
     if (file == NULL) {
         printf("New file initiated");
