@@ -92,7 +92,7 @@ testSinglePageContent(void)
   TEST_CHECK(readFirstBlock (&fh, ph));
   for (i=0; i < PAGE_SIZE; i++)
     ASSERT_TRUE((ph[i] == (i % 10) + '0'), "character in page read from disk is the one we expected.");
-  printf("reading first block\n");
+  // printf("reading first block\n");
 
   // destroy new page file
   TEST_CHECK(destroyPageFile (TESTPF));
