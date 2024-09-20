@@ -41,6 +41,25 @@ The project contains the following files:
 - Makefile: To compile and run the code.
 - README.txt: This file, describing the implementation and structure.
 
+### Functions
+
+1) initStorageManager(): Initializes the storage manager. This should be called before any file operations.
+2) createPageFile(char *fileName): Creates a new page file of one page filled with zeros.
+3) openPageFile(char *fileName, SM_FileHandle *fHandle): Opens an existing page file and initializes the file handle.
+4) closePageFile(SM_FileHandle *fHandle): Closes an open page file.
+5) destroyPageFile(char *fileName): Deletes the specified page file.
+6) readBlock(int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the block at the specified position into memory.
+7) getBlockPos(SM_FileHandle *fHandle): Returns the current page position in the file.
+8) readFirstBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the first block of the file.
+9) readPreviousBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the block before the current position.
+10) readCurrentBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the block at the current position.
+11) readNextBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the block after the current position.
+12) readLastBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Reads the last block of the file.
+13) writeBlock(int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage): Writes the block at the specified position in the file.
+14) writeCurrentBlock(SM_FileHandle *fHandle, SM_PageHandle memPage): Writes the current block to the file.
+15) appendEmptyBlock(SM_FileHandle *fHandle): Appends an empty block (filled with zeros) to the file.
+16) ensureCapacity(int numberOfPages, SM_FileHandle *fHandle): Ensures that the file has at least the specified number of pages.
+
 ### Added Test Cases
 
 1) Test Case: testAppendEmptyPage
@@ -97,3 +116,15 @@ Cleanup by closing and destroying the page file.
 Expected Results:
 Data written to the second page should be correctly saved and retrievable.
 The first page should remain unaffected and empty.
+
+### Contributions
+
+1) Kamakshya Nanda - createPageFile()
+2) Yash Vardhan Sharma - openPageFile(),closePageFile()
+3) Prakriti Sharma - destroyPageFile()
+4) Collaborative work (Everyone worked together) -
+   readBlock(), writeBlock(), appendEmptyBlock(), readLastBlock(), getBlockPos(),
+   readFirstBlock(), readPreviousBlock(), readCurrentBlock(), readNextBlock(),
+   writeCurrentBlock(), ensureCapacity()
+5)Test-cases(Kamakshya Nanda & Prakriti Sharma): testReadBeyondEOF(), testAppendEmptyPage(), testReadLastBlock()
+
