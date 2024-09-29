@@ -3,4 +3,5 @@ project(assignment_2 C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(assignment_2 storage_mgr.c)
+add_executable(assignment_2 storage_mgr.c
+        buffer_mgr.c)
