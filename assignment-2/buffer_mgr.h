@@ -20,6 +20,15 @@ typedef enum ReplacementStrategy {
 typedef int PageNumber;
 #define NO_PAGE -1
 
+
+typedef struct Frame {
+	PageNumber pageNum;      // The number of the page stored in this frame
+	bool isDirty;            // Whether the page is modified (dirty) or not
+	int fixCount;            // The number of clients using this page (pin count)
+	char *data;              // Pointer to the actual page data stored in memory
+} Frame;
+
+
 typedef struct BM_BufferPool {
 	char *pageFile;
 	int numPages;
