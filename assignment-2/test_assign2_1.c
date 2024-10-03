@@ -9,7 +9,7 @@
 #include <string.h>
 //
 // // var to store the current test's name
-// char *testName;
+char *testName;
 //
 // // check whether two the content of a buffer pool is the same as an expected content
 // // (given in the format produced by sprintPoolContent)
@@ -29,8 +29,8 @@
 //   } while(0)
 //
 // // test and helper methods
-// static void testCreatingAndReadingDummyPages (void);
-// static void createDummyPages(BM_BufferPool *bm, int num);
+static void testCreatingAndReadingDummyPages (void);
+static void createDummyPages(BM_BufferPool *bm, int num);
 // static void checkDummyPages(BM_BufferPool *bm, int num);
 //
 // static void testReadPage (void);
@@ -38,20 +38,19 @@
 // static void testFIFO (void);
 // static void testLRU (void);
 //
-// // main method
-// int
-// main (void)
-// {
-//   initStorageManager();
-//   testName = "";
-//
-//   testCreatingAndReadingDummyPages();
-//   testReadPage();
-//   testFIFO();
-//   testLRU();
-// }
-//
-// // create n pages with content "Page X" and read them back to check whether the content is right
+// main method
+int main (void)
+{
+  initStorageManager();
+  testName = "";
+
+  // testCreatingAndReadingDummyPages();
+  // testReadPage();
+  // testFIFO();
+  // testLRU();
+}
+
+// create n pages with content "Page X" and read them back to check whether the content is right
 // void
 // testCreatingAndReadingDummyPages (void)
 // {
@@ -71,8 +70,8 @@
 //   free(bm);
 //   TEST_DONE();
 // }
-//
-//
+
+
 void
 createDummyPages(BM_BufferPool *bm, int num)
 {
@@ -89,7 +88,7 @@ createDummyPages(BM_BufferPool *bm, int num)
 //       CHECK(unpinPage(bm,h));
      // }
 
-   // CHECK(shutdownBufferPool(bm));
+   CHECK(shutdownBufferPool(bm));
 //
    free(h);
 }
