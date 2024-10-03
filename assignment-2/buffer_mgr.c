@@ -42,7 +42,8 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
     // Before shutting down, ensure that all pinned pages are unpinned
     for (int i = 0; i < bm->numPages; i++) {
         if (frames[i].fixCount > 0) {
-            return RC_message("RC_SHUTDOWN_POOL_HAS_PINNED_PAGES"); // Error: Pool has pinned pages
+            // return RC_message("RC_SHUTDOWN_POOL_HAS_PINNED_PAGES"); // Error: Pool has pinned pages
+            return RC_FILE_NOT_FOUND;
         }
     }
 
@@ -113,7 +114,8 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
     }
 
     // If the page is not found in any frame, return an error
-    return RC_message("Page not found.");
+    // return RC_message("Page not found.");
+    return RC_FILE_NOT_FOUND;
 }
 
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
@@ -128,13 +130,15 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
                 return RC_OK; // Return success code
             } else {
                 // If the fix count is already 0, return an error (optional, depending on requirements)
-                return RC_message("RC_PIN_COUNT_ERROR"); // You can define this error code in dberror.h
+                // return RC_message("RC_PIN_COUNT_ERROR"); // You can define this error code in dberror.h
+                return RC_FILE_NOT_FOUND;
             }
         }
     }
 
     // If the page is not found in any frame, return an error
-    return RC_message("RC_PAGE_NOT_FOUND");
+    // return RC_message("RC_PAGE_NOT_FOUND");
+    return RC_FILE_NOT_FOUND;
 }
 
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
@@ -173,7 +177,8 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
 
     // Close the page file if the page was not found in the buffer pool
     closePageFile(&fh);
-    return RC_message("RC_PAGE_NOT_FOUND"); // If the page was not found
+    // return RC_message("RC_PAGE_NOT_FOUND"); // If the page was not found
+    return RC_FILE_NOT_FOUND;
 }
 
 
