@@ -34,6 +34,8 @@ typedef struct BM_BufferPool {
 	int numPages;
 	ReplacementStrategy strategy;
 	void *mgmtData; // use this one to store the bookkeeping info your buffer
+	int numReadIO;  // Track the number of read I/O operations
+	int numWriteIO; // Track the number of write I/O operations
 	// manager needs for a buffer pool
 } BM_BufferPool;
 

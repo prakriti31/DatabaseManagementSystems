@@ -37,62 +37,67 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
     return RC_OK; // Return success code
 }
 RC shutdownBufferPool(BM_BufferPool *const bm) {
-    Frame *frames = (Frame *)bm->mgmtData; // Get the pointer to frames
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
 
-    // Check if any pages are pinned
+    // Before shutting down, ensure that all pinned pages are unpinned
     for (int i = 0; i < bm->numPages; i++) {
         if (frames[i].fixCount > 0) {
-            // If any page is pinned, return an error
-            return RC_FILE_NOT_FOUND;
+            return RC_message("RC_SHUTDOWN_POOL_HAS_PINNED_PAGES"); // Error: Pool has pinned pages
         }
     }
 
-    // Write back dirty pages to disk before shutting down
-    for (int i = 0; i < bm->numPages; i++) {
-        if (frames[i].isDirty) {
-            // Write the page back to disk
-            RC result = writeBlock(frames[i].pageNum, bm->pageFile, frames[i].data);
-            if (result != RC_OK) {
-                return result; // Return error if writing to disk fails
-            }
-        }
+    // Flush all dirty pages to disk
+    RC status = forceFlushPool(bm);
+    if (status != RC_OK) {
+        return status; // Return error code if forceFlushPool fails
     }
 
-    // Free the allocated memory for frames
+    // Free the memory allocated for the frames array
     free(frames);
+    bm->mgmtData = NULL; // Set the management data to NULL
 
-    // Free the page file name if it was duplicated
+    // Free the page file name
     free(bm->pageFile);
+    bm->pageFile = NULL;
 
-    // Clear the pointer
-    bm->mgmtData = NULL;
-
-    return RC_OK; // Return success code
+    return RC_OK; // Success
 }
 
 RC forceFlushPool(BM_BufferPool *const bm) {
-    Frame *frames = (Frame *)bm->mgmtData; // Get the pointer to frames
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
 
-    // Iterate over all frames in the buffer pool
+    SM_FileHandle fh;  // Declare an SM_FileHandle for the file
+
+    // Open the page file using the Storage Manager function
+    RC status = openPageFile(bm->pageFile, &fh);
+    if (status != RC_OK) {
+        return status; // Return error code if file opening fails
+    }
+
+    // Iterate through all the frames
     for (int i = 0; i < bm->numPages; i++) {
-        // Check if the frame is dirty and has a fix count of 0
+        // Check if the page is dirty and not pinned (fixCount == 0)
         if (frames[i].isDirty && frames[i].fixCount == 0) {
-            // Create a temporary page handle to pass to forcePage
-            BM_PageHandle pageHandle = {.pageNum = frames[i].pageNum, .data = frames[i].data};
-
-            // Write the page to disk
-            RC writeStatus = forcePage(bm, &pageHandle);
-            if (writeStatus != RC_OK) {
-                return writeStatus; // Return error code if writing to disk fails
+            // Write the dirty page back to disk using the SM_FileHandle
+            status = writeBlock(frames[i].pageNum, &fh, frames[i].data);
+            if (status != RC_OK) {
+                return status; // Return error code if writeBlock fails
             }
 
-            // Mark the page as clean since it's written to disk
+            // Mark the page as clean after writing to disk
             frames[i].isDirty = false;
+
+            // Increment the write I/O count
+            bm->numWriteIO++; // Increment the number of write I/O operations
         }
     }
 
-    return RC_OK; // Return success code
+    // Close the page file after writing all dirty pages
+    closePageFile(&fh);
+
+    return RC_OK; // Success
 }
+
 
 
 // Buffer Manager Interface Access Pages
@@ -123,58 +128,183 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
                 return RC_OK; // Return success code
             } else {
                 // If the fix count is already 0, return an error (optional, depending on requirements)
-                return RC_message(""); // You can define this error code in dberror.h
+                return RC_message("RC_PIN_COUNT_ERROR"); // You can define this error code in dberror.h
             }
         }
     }
 
     // If the page is not found in any frame, return an error
-    return RC_message("");
+    return RC_message("RC_PAGE_NOT_FOUND");
 }
 
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
-    Frame *frames = (Frame *)bm->mgmtData; // Get the pointer to frames
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
+    SM_FileHandle fh; // Declare an SM_FileHandle
 
-    // Iterate over all frames to find the one corresponding to the page
+    // Open the page file using the Storage Manager function
+    RC status = openPageFile(bm->pageFile, &fh);
+    if (status != RC_OK) {
+        return status; // Return error code if file opening fails
+    }
+
+    // Iterate through the frames to find the page
     for (int i = 0; i < bm->numPages; i++) {
         if (frames[i].pageNum == page->pageNum) { // Check if the page number matches
-            // Check if the page is dirty
-            if (frames[i].isDirty) {
-                // Write the page content to disk
-                RC writeStatus = writeBlock(frames[i].pageNum, bm->pageFile, frames[i].data);
-                if (writeStatus != RC_OK) {
-                    return writeStatus; // Return error code if writing to disk fails
-                }
-
-                // Mark the page as clean since it's now written to disk
-                frames[i].isDirty = false;
+            // Write the page back to disk using the SM_FileHandle
+            status = writeBlock(frames[i].pageNum, &fh, frames[i].data);
+            if (status != RC_OK) {
+                closePageFile(&fh); // Close the file handle before returning
+                return status; // Return error code if writeBlock fails
             }
-            return RC_OK; // Return success code
+            if (status == RC_OK) {
+                bm->numWriteIO++; // Increment the write I/O count
+            }
+
+            // Mark the page as clean after writing to disk
+            frames[i].isDirty = false;
+
+            // Increment the write I/O count
+            bm->numWriteIO++; // Increment the number of write I/O operations
+
+            closePageFile(&fh); // Close the file handle after writing
+            return RC_OK; // Return success
         }
     }
 
-    // If the page is not found in any frame, return an error
-    return RC_message("");
+    // Close the page file if the page was not found in the buffer pool
+    closePageFile(&fh);
+    return RC_message("RC_PAGE_NOT_FOUND"); // If the page was not found
 }
 
-RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
-        const PageNumber pageNum) {
-    return 0;
+
+RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
+    SM_FileHandle fh; // Declare an SM_FileHandle
+
+    // Open the page file using the Storage Manager function
+    RC status = openPageFile(bm->pageFile, &fh);
+    if (status != RC_OK) {
+        return status; // Return error code if file opening fails
+    }
+
+    // Check if the requested page is already in the buffer pool
+    for (int i = 0; i < bm->numPages; i++) {
+        if (frames[i].pageNum == pageNum) { // Page is already in the buffer
+            frames[i].fixCount++; // Increment the fix count
+            page->pageNum = frames[i].pageNum; // Set the page number in the page handle
+            page->data = frames[i].data; // Set the data pointer to the frame's data
+            closePageFile(&fh); // Close the file handle before returning
+            return RC_OK; // Return success
+        }
+    }
+
+    // If the page is not in the buffer, we need to load it
+    // Find a frame to replace (evict) if necessary
+    int frameToReplace = -1;
+
+    for (int i = 0; i < bm->numPages; i++) {
+        if (frames[i].fixCount == 0) { // Look for a frame that is not pinned
+            frameToReplace = i; // This frame can be replaced
+            break;
+        }
+    }
+
+    // If no unpinned frames are available, we need to evict a frame
+    if (frameToReplace == -1) {
+        // Implement your page replacement strategy here (e.g., FIFO, LRU)
+        // For now, we will just use a simple approach: evict the first frame
+        // In a real implementation, you should use the specified replacement strategy.
+        frameToReplace = 0; // Just evict the first frame (for demonstration purposes)
+    }
+
+    // If the frame to replace has a dirty page, write it back to disk
+    if (frames[frameToReplace].isDirty) {
+        status = writeBlock(frames[frameToReplace].pageNum, &fh, frames[frameToReplace].data);
+        if (status != RC_OK) {
+            closePageFile(&fh); // Close the file handle before returning
+            return status; // Return error code if writeBlock fails
+        }
+    }
+
+    // Load the new page from disk into the frame
+    status = readBlock(pageNum, &fh, frames[frameToReplace].data);
+    if (status != RC_OK) {
+        closePageFile(&fh); // Close the file handle before returning
+        return status; // Return error code if readBlock fails
+    }
+    if (status == RC_OK) {
+        bm->numReadIO++; // Increment the read I/O count
+    }
+
+
+    // Update the frame with the new page information
+    frames[frameToReplace].pageNum = pageNum; // Update the page number in the frame
+    frames[frameToReplace].isDirty = false; // The page is initially clean
+    frames[frameToReplace].fixCount = 1; // Set the fix count to 1 for the new page
+
+    // Set the page handle to point to the loaded page
+    page->pageNum = pageNum; // Set the page number in the page handle
+    page->data = frames[frameToReplace].data; // Set the data pointer to the new frame's data
+
+    closePageFile(&fh); // Close the file handle after processing
+    return RC_OK; // Return success
 }
+
 
 // Statistics Interface
-PageNumber *getFrameContents (BM_BufferPool *const bm) {
-    return NULL;
+PageNumber *getFrameContents(BM_BufferPool *const bm) {
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
+    PageNumber *frameContents = malloc(bm->numPages * sizeof(PageNumber)); // Allocate memory for the output array
+
+    if (frameContents == NULL) {
+        return NULL; // Return NULL if memory allocation fails
+    }
+
+    // Iterate through the frames and fill the output array
+    for (int i = 0; i < bm->numPages; i++) {
+        frameContents[i] = frames[i].pageNum; // Set the page number for the frame
+    }
+
+    return frameContents; // Return the array of page numbers
 }
-bool *getDirtyFlags (BM_BufferPool *const bm) {
-    return NULL;
+
+
+bool *getDirtyFlags(BM_BufferPool *const bm) {
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
+    bool *dirtyFlags = malloc(bm->numPages * sizeof(bool)); // Allocate memory for the output array
+
+    if (dirtyFlags == NULL) {
+        return NULL; // Return NULL if memory allocation fails
+    }
+
+    // Iterate through the frames and fill the output array
+    for (int i = 0; i < bm->numPages; i++) {
+        dirtyFlags[i] = frames[i].isDirty; // Set the dirty flag for the frame
+    }
+
+    return dirtyFlags; // Return the array of dirty flags
 }
-int *getFixCounts (BM_BufferPool *const bm) {
-    return NULL;
+
+int *getFixCounts(BM_BufferPool *const bm) {
+    Frame *frames = (Frame *)bm->mgmtData; // Get the frames stored in mgmtData
+    int *fixCounts = malloc(bm->numPages * sizeof(int)); // Allocate memory for the output array
+
+    if (fixCounts == NULL) {
+        return NULL; // Return NULL if memory allocation fails
+    }
+
+    // Iterate through the frames and fill the output array
+    for (int i = 0; i < bm->numPages; i++) {
+        fixCounts[i] = frames[i].fixCount; // Set the fix count for the frame
+    }
+
+    return fixCounts; // Return the array of fix counts
 }
-int getNumReadIO (BM_BufferPool *const bm) {
-    return 0;
+
+int getNumReadIO(BM_BufferPool *const bm) {
+    return bm->numReadIO; // Return the number of read I/O operations
 }
-int getNumWriteIO (BM_BufferPool *const bm) {
-    return 0;
+
+int getNumWriteIO(BM_BufferPool *const bm) {
+    return bm->numWriteIO; // Return the number of write I/O operations
 }
