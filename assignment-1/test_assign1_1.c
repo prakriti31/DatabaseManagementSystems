@@ -34,7 +34,7 @@ main (void)
   //
   testCreateOpenClose();
   testSinglePageContent();
-  // Custom test cases
+  // Custom test cases (Kamakshya Nanda & Prakriti Sharma)
   testAppendEmptyPage();
   testReadLastBlock();
   testReadBeyondEOF();
@@ -113,6 +113,7 @@ testSinglePageContent(void)
   TEST_DONE();
 }
 
+// Kamakshya & Prakriti
 void
 testAppendEmptyPage(void)
 {
@@ -144,6 +145,7 @@ testAppendEmptyPage(void)
   TEST_DONE();
 }
 
+// Kamakshya & Prakriti
 /* Try to read the last block of a multi-page file */
 void
 testReadLastBlock(void)
@@ -184,6 +186,7 @@ testReadLastBlock(void)
   TEST_DONE();
 }
 
+// Kamakshya & Prakriti
 /* Try reading beyond End of the file (beyond last page of the file) */
 void
 testReadBeyondEOF(void)
@@ -211,6 +214,7 @@ testReadBeyondEOF(void)
   TEST_DONE();
 }
 
+// Kamakshya & Prakriti
 /* Test writing and reading at a specific page position in a multi-page file */
 void
 testWriteReadBlockAtPosition(void)

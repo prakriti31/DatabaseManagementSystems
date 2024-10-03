@@ -13,8 +13,9 @@
 void initStorageManager(void) {
     printf("Storage manager init.\n");
 }
+// Kamakshya Nanda
 RC createPageFile(char *fileName) {
-    /*
+    /* 
      * This function creates a File first,
      * then writes '/0' byte to it, to create a page.
      */
@@ -31,6 +32,7 @@ RC createPageFile(char *fileName) {
 
 }
 
+// Yash Vardhan Sharma
 RC openPageFile(char *fileName, SM_FileHandle *fHandle) {
     /*
      * This function is used to open the file created
@@ -57,6 +59,7 @@ RC openPageFile(char *fileName, SM_FileHandle *fHandle) {
     }
 }
 
+// Yash Vardhan Sharma
 RC closePageFile(SM_FileHandle *fHandle) {
     // Check if SM_FileHandle -> fileName is not empty to validate that file was opened.
 
@@ -67,6 +70,7 @@ RC closePageFile(SM_FileHandle *fHandle) {
     return RC_OK;
 }
 
+// Prakriti Sharma
 RC destroyPageFile(char *fileName) {
     if(remove(fileName) == 0) return RC_OK;
     return RC_FILE_NOT_FOUND;
@@ -79,6 +83,7 @@ RC destroyPageFile(char *fileName) {
  * ############################
  */
 
+// Kamakshya, Yash and Prakriti
 RC readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
 
     // This function reads a block/page from the file.
@@ -105,29 +110,35 @@ RC readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
     return RC_OK;
 }
 
+// Kamakshya, Yash and Prakriti
 int getBlockPos (SM_FileHandle *fHandle) {
     // Returns current block/page position. (last accessed)
     return fHandle -> curPagePos;
 }
+// Kamakshya, Yash and Prakriti
 RC readFirstBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Reads 1st block/page from the file.
     readBlock(1,fHandle,memPage);
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC readPreviousBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Reads block/page previous to the current block/page.
     readBlock(fHandle -> curPagePos - 1,fHandle,memPage);
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC readCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Reads current block/page from the file.
     readBlock(fHandle -> curPagePos,fHandle,memPage);
 }
+// Kamakshya, Yash and Prakriti
 RC readNextBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Reads block/page next to the current block/page.
     readBlock(fHandle -> curPagePos + 1,fHandle,memPage);
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC readLastBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Reads last block/page from the file.
     readBlock(fHandle -> totalNumPages,fHandle,memPage);
@@ -140,6 +151,7 @@ RC readLastBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
  * #################################
  */
 
+// Kamakshya, Yash and Prakriti
 RC writeBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Writes a block/page on the file.
     FILE *file = fopen(fHandle -> fileName, "wb");
@@ -148,11 +160,13 @@ RC writeBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
     fHandle -> curPagePos = pageNum;
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC writeCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
     // Writes data to the current block/page.
     writeBlock(fHandle -> curPagePos, fHandle, memPage);
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC appendEmptyBlock (SM_FileHandle *fHandle) {
     // Appends an empty block/page
     FILE *file = fopen(fHandle -> fileName, "wb");
@@ -165,6 +179,7 @@ RC appendEmptyBlock (SM_FileHandle *fHandle) {
 
     return RC_OK;
 }
+// Kamakshya, Yash and Prakriti
 RC ensureCapacity (int numberOfPages, SM_FileHandle *fHandle) {
     // Ensures that total pages/blocks in the file is up to date with the number of pages in the struct.
     int totalPages = fHandle -> totalNumPages;
