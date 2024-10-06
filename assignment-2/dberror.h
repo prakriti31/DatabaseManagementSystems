@@ -15,6 +15,18 @@ typedef int RC;
 #define RC_WRITE_FAILED 3
 #define RC_READ_NON_EXISTING_PAGE 4
 
+// Custom error codes
+#define RC_PINNED_PAGES                  10
+#define RC_BUFFER_POOL_ALREADY_INIT     101
+#define RC_BUFFER_POOL_NOT_INIT         102
+#define RC_BUFFER_POOL_SHUTDOWN         103
+#define RC_PINNED_PAGES_IN_POOL         104
+#define RC_PAGE_NOT_FOUND               105
+#define RC_PAGE_ALREADY_PINNED          106
+#define RC_PAGE_NOT_PINNED              107
+#define RC_BUFFER_POOL_FULL             108
+#define RC_REPLACEMENT_STRATEGY_NOT_IMPLEMENTED 109
+
 #define RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE 200
 #define RC_RM_EXPR_RESULT_IS_NOT_BOOLEAN 201
 #define RC_RM_BOOLEAN_EXPR_ARG_IS_NOT_BOOLEAN 202

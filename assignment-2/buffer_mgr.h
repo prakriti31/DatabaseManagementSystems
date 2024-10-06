@@ -45,6 +45,8 @@ typedef struct BM_MgmtData {
 	int *fifoQueue;
 	int *timestamps;
 	int currentTimestamp;
+	int accessCounter; // for LRU
+	int *accessOrder;  // Add this line
 } BM_MgmtData;
 
 

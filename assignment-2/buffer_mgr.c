@@ -7,17 +7,6 @@
 #include "buffer_mgr_stat.h"
 #include "storage_mgr.h"
 
-// Custom error codes
-#define RC_PINNED_PAGES                  10
-#define RC_BUFFER_POOL_ALREADY_INIT     201
-#define RC_BUFFER_POOL_NOT_INIT         202
-#define RC_BUFFER_POOL_SHUTDOWN         203
-#define RC_PINNED_PAGES_IN_POOL         204
-#define RC_PAGE_NOT_FOUND               205
-#define RC_PAGE_ALREADY_PINNED          206
-#define RC_PAGE_NOT_PINNED              207
-#define RC_BUFFER_POOL_FULL             208
-#define RC_REPLACEMENT_STRATEGY_NOT_IMPLEMENTED 209
 
 RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName,
 		  const int numPages, ReplacementStrategy strategy,
@@ -39,10 +28,18 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName,
     mgmt->fifoQueue[i] = i;
   }
 
+  mgmt->fifoQueue = (int *)malloc(numPages * sizeof(int));
+  for (int i = 0; i < numPages; i++) {
+    mgmt->fifoQueue[i] = i;
+  }
+
   mgmt->readIO = 0;
   mgmt->writeIO = 0;
   mgmt->dirtyFlags = (bool *)calloc(numPages, sizeof(bool));
   mgmt->fixCounts = (int *)calloc(numPages, sizeof(int));
+
+  mgmt->timestamps = (int *)calloc(numPages, sizeof(int));
+  mgmt->currentTimestamp = 0;
 
   SM_FileHandle fileHandle;
   RC rc = openPageFile(pageFileName, &fileHandle);
@@ -79,6 +76,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
   free(mgmt->dirtyFlags);
   free(mgmt->fixCounts);
   free(mgmt->fifoQueue);
+  free(mgmt->timestamps);
 
   // Close the page file
   RC rc = closePageFile(&(mgmt->fileHandle));
@@ -123,22 +121,22 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
   return RC_PAGE_NOT_FOUND;
 }
 
-RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
-{
-  BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
-
-  for (int i = 0; i < bm->numPages; i++) {
-    if (mgmt->frames[i].pageNum == page->pageNum) {
-      if (mgmt->fixCounts[i] == 0)
-        return RC_PAGE_NOT_PINNED;
-
-      mgmt->fixCounts[i]--;
-      return RC_OK;
-    }
-  }
-
-  return RC_PAGE_NOT_FOUND;
-}
+// RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
+// {
+//   BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
+//
+//   for (int i = 0; i < bm->numPages; i++) {
+//     if (mgmt->frames[i].pageNum == page->pageNum) {
+//       if (mgmt->fixCounts[i] == 0)
+//         return RC_PAGE_NOT_PINNED;
+//
+//       mgmt->fixCounts[i]--;
+//       return RC_OK;
+//     }
+//   }
+//
+//   return RC_PAGE_NOT_FOUND;
+// }
 
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
@@ -158,71 +156,115 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
   return RC_PAGE_NOT_FOUND;
 }
 
-int findFrameToReplace(BM_BufferPool *const bm)
-{
+static int findFrameToReplace(BM_BufferPool *const bm) {
   BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
 
   if (bm->strategy == RS_FIFO) {
-    int frameNum = mgmt->fifoQueue[0];
-
-    for (int i = 0; i < bm->numPages - 1; i++)
-      mgmt->fifoQueue[i] = mgmt->fifoQueue[i + 1];
-
-    mgmt->fifoQueue[bm->numPages - 1] = frameNum;
-
-    return frameNum;
-  }
-  else if (bm->strategy == RS_LRU) {
-    int minTimestamp = mgmt->timestamps[0], minIndex = 0;
-
-    for (int i = 1; i < bm->numPages; i++) {
-      if (mgmt->timestamps[i] < minTimestamp) {
-        minTimestamp = mgmt->timestamps[i];
-        minIndex = i;
+    // Implement FIFO strategy
+    for (int i = 0; i < bm->numPages; i++) {
+      int frameIndex = mgmt->fifoQueue[i];
+      if (mgmt->fixCounts[frameIndex] == 0) {
+        // Move this frame to the end of the queue
+        for (int j = i; j < bm->numPages - 1; j++) {
+          mgmt->fifoQueue[j] = mgmt->fifoQueue[j + 1];
+        }
+        mgmt->fifoQueue[bm->numPages - 1] = frameIndex;
+        return frameIndex;
       }
     }
-
-    mgmt->timestamps[minIndex] = ++mgmt->currentTimestamp;
-
-    return minIndex;
+  } else if (bm->strategy == RS_LRU) {
+    int leastUsed = mgmt->timestamps[0];
+    int leastUsedIndex = 0;
+    for (int i = 1; i < bm->numPages; i++) {
+      if (mgmt->fixCounts[i] == 0 && mgmt->timestamps[i] < leastUsed) {
+        leastUsed = mgmt->timestamps[i];
+        leastUsedIndex = i;
+      }
+    }
+    return leastUsedIndex;
   }
 
   return NO_PAGE;
 }
 
-RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page,
-	   const PageNumber pageNum)
-{
+static void updateLRUOrder(BM_BufferPool *const bm, int frameIndex) {
   BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
+  mgmt->timestamps[frameIndex] = ++(mgmt->currentTimestamp);
+}
 
-  for (int i = 0; i < bm->numPages; i++) {
-    if (mgmt->frames[i].pageNum == pageNum) {
-      page->pageNum = pageNum;
-      page->data = mgmt->frames[i].data;
-      mgmt->fixCounts[i]++;
-      return RC_OK;
+RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
+    BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
+
+    // Check if the page is already in the buffer pool
+    for (int i = 0; i < bm->numPages; i++) {
+        if (mgmt->frames[i].pageNum == pageNum) {
+            page->pageNum = pageNum;
+            page->data = mgmt->frames[i].data;
+            mgmt->fixCounts[i]++;
+            if (bm->strategy == RS_LRU) {
+                updateLRUOrder(bm, i);
+            }
+            return RC_OK;
+        }
     }
-  }
 
-  int frameNum = findFrameToReplace(bm);
-  if (frameNum == NO_PAGE)
-    return RC_BUFFER_POOL_FULL;
+    // If the page is not in the buffer pool, we need to load it
+    int frameIndex = findFrameToReplace(bm);
+    if (frameIndex == NO_PAGE)
+        return -1;
 
-  if (mgmt->dirtyFlags[frameNum])
-    forcePage(bm, &mgmt->frames[frameNum]);
-  if(mgmt->frames[frameNum].data != NULL) {
-    free(mgmt->frames[frameNum].data);
-  }
-  mgmt->frames[frameNum].data = malloc(PAGE_SIZE);
-  readBlock(pageNum, &(mgmt->fileHandle), mgmt->frames[frameNum].data);
-  mgmt->frames[frameNum].pageNum = pageNum;
-  mgmt->fixCounts[frameNum] = 1;
-  mgmt->readIO++;
+    // If the chosen frame is dirty, write it back to disk
+    if (mgmt->dirtyFlags[frameIndex]) {
+        forcePage(bm, &mgmt->frames[frameIndex]);
+    }
 
-  page->pageNum = pageNum;
-  page->data = mgmt->frames[frameNum].data;
+    // Load the new page from disk
+    if (mgmt->frames[frameIndex].data != NULL) {
+        free(mgmt->frames[frameIndex].data);
+    }
+    mgmt->frames[frameIndex].data = malloc(PAGE_SIZE);
+    RC rc = readBlock(pageNum, &(mgmt->fileHandle), mgmt->frames[frameIndex].data);
+    if (rc != RC_OK) {
+        if (rc == RC_READ_NON_EXISTING_PAGE) {
+            // Initialize new page
+            memset(mgmt->frames[frameIndex].data, 0, PAGE_SIZE);
+            char pageContent[PAGE_SIZE];
+            snprintf(pageContent, PAGE_SIZE, "Page-%i", pageNum);
+            strncpy(mgmt->frames[frameIndex].data, pageContent, strlen(pageContent));
+        } else {
+            return rc;
+        }
+    }
 
-  return RC_OK;
+    mgmt->frames[frameIndex].pageNum = pageNum;
+    mgmt->fixCounts[frameIndex] = 1;
+    mgmt->dirtyFlags[frameIndex] = false;
+    mgmt->readIO++;
+
+    if (bm->strategy == RS_LRU) {
+        updateLRUOrder(bm, frameIndex);
+    }
+
+    page->pageNum = pageNum;
+    page->data = mgmt->frames[frameIndex].data;
+    return RC_OK;
+}
+
+// Modify the unpinPage function
+RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
+    BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
+    for (int i = 0; i < bm->numPages; i++) {
+        if (mgmt->frames[i].pageNum == page->pageNum) {
+            if (mgmt->fixCounts[i] == 0)
+                return RC_PAGE_NOT_PINNED;
+            mgmt->fixCounts[i]--;
+            if (bm->strategy == RS_LRU) {
+                updateLRUOrder(bm, i);
+            }
+            return RC_OK;
+        }
+    }
+    return RC_PAGE_NOT_FOUND;
 }
 
 PageNumber *getFrameContents(BM_BufferPool *const bm)
