@@ -76,7 +76,6 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
 
     // Free the management data and the buffer pool structure
     free(mgmt);
-    // free(bm);
     return RC_OK;
 }
 
@@ -207,7 +206,6 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
     return RC_OK;
 }
 
-// Modify the unpinPage function
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
     BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
     for (int i = 0; i < bm->numPages; i++) {
