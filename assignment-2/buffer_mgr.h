@@ -46,7 +46,7 @@ typedef struct BM_MgmtData {
 	int *timestamps;
 	int currentTimestamp;
 	int accessCounter; // for LRU
-	int *accessOrder;  // Add this line
+	bool *referenceFlags; // Add this line for CLOCK
 } BM_MgmtData;
 
 
