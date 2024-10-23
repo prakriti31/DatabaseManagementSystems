@@ -21,4 +21,6 @@ add_executable(assign3_record_manager
     tables.h
     test_assign3_1.c
     test_expr.c
-    test_helper.h)
+    test_helper.h
+        buffer_mgr.c
+        storage_mgr.c)

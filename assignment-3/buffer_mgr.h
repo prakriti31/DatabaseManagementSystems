@@ -6,6 +6,8 @@
 
 // Include bool DT
 #include "dt.h"
+#include "storage_mgr.h"
+
 
 // Replacement Strategies
 typedef enum ReplacementStrategy {
@@ -32,6 +34,21 @@ typedef struct BM_PageHandle {
 	PageNumber pageNum;
 	char *data;
 } BM_PageHandle;
+
+typedef struct BM_MgmtData {
+	BM_PageHandle *frames;
+	bool *dirtyFlags;
+	int *fixCounts;
+	int readIO;
+	int writeIO;
+	SM_FileHandle fileHandle;
+	int *fifoQueue;
+	int *timestamps;
+	int currentTimestamp;
+	int accessCounter; // for LRU
+	bool *referenceFlags; // Add this line for CLOCK
+} BM_MgmtData;
+
 
 // convenience macros
 #define MAKE_POOL()					\
