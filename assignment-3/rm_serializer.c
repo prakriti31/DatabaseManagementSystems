@@ -18,14 +18,14 @@ typedef struct VarString {
 			var = (VarString *) malloc(sizeof(VarString));	\
 			var->size = 0;					\
 			var->bufsize = 100;					\
-			var->buf = calloc(100,1);//Fixed:Summer 21: calloc(100,0);			\
+			var->buf = calloc(100,1);   			\
 		} while (0)
 
 #define FREE_VARSTRING(var)			\
 		do {						\
 			free(var->buf);				\
 			free(var);					\
-		} while (0)
+		} while (0);
 
 #define GET_STRING(result, var)			\
 		do {						\
@@ -83,7 +83,7 @@ serializeTableInfo(RM_TableData *rel)
 	RETURN_STRING(result);
 }
 
-char * 
+char *
 serializeTableContent(RM_TableData *rel)
 {
 	int i;
