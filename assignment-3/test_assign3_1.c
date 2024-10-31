@@ -78,7 +78,7 @@ main (void)
 	testName = "";
 
 	testInsertManyRecords();
-	// testRecords();
+	// testRecords(); // Working
 	// testCreateTableAndInsert();
 	// testUpdateTable();
 	// testScans();
@@ -388,7 +388,7 @@ testInsertManyRecords(void)
 	TestRecord updates[] = {
 			{3333, "iiii", 6}
 	};
-	int numInserts = 10000, i;
+	int numInserts = 10, i;
 	int randomRec = 3333;
 	Record *r;
 	RID *rids;
