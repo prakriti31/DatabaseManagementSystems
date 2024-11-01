@@ -407,13 +407,6 @@ int getNumTuples(RM_TableData *rel) {
 
 // handling records in a table
 RC insertRecord(RM_TableData *rel, Record *record) {
-    // --------------- DEBUGGING -------------------
-    // printf("Entering insertRecord, record data to be inserted: ");
-    // for (int i = 0; i < getRecordSize(rel->schema); i++) {
-    //     printf("%02x ", record->data[i] & 0xff);
-    // }
-    // printf("\n");
-    // --------------- DEBUGGING -------------------
     SM_FileHandle fh;
     RC rc;
 
@@ -421,119 +414,98 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     rc = openPageFile(rel->name, &fh);
     if (rc != RC_OK) return rc;
 
-    // Step 2: Read and update numTuples in page 1
-    char *data = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(1, &fh, data);
+    // Step 2: Calculate record size and slots per page
+    int recordSize = getRecordSize(rel->schema);
+    int slotsPerPage = (PAGE_SIZE - sizeof(int)) / recordSize;
+
+    // Step 3: Read metadata page (page 1)
+    char *metaData = (char *)calloc(PAGE_SIZE, 1);
+    if (metaData == NULL) {
+        closePageFile(&fh);
+        return RC_WRITE_FAILED;
+    }
+
+    rc = readBlock(1, &fh, metaData);
     if (rc != RC_OK) {
-        free(data);
+        free(metaData);
         closePageFile(&fh);
         return rc;
     }
 
-    // Debugging: Print the current tuple count
+    // Read current number of tuples
     int numTuples;
-    memcpy(&numTuples, data, sizeof(int));
-    printf("numTuples before increment: %d\n", numTuples);
+    memcpy(&numTuples, metaData, sizeof(int));
 
+    // Calculate target page and slot
+    int targetPage = 2 + (numTuples / slotsPerPage);
+    int targetSlot = numTuples % slotsPerPage;
 
-    // Increment tuple count and update it in page 1
-    numTuples++;
-    memcpy(data, &numTuples, sizeof(int));
-    rc = writeBlock(1, &fh, data);
-    free(data);
-
+    // Ensure capacity for target page
+    rc = ensureCapacity(targetPage + 1, &fh);
     if (rc != RC_OK) {
+        free(metaData);
         closePageFile(&fh);
         return rc;
     }
+
+    // Read target page
+    char *pageData = (char *)calloc(PAGE_SIZE, 1);
+    if (pageData == NULL) {
+        free(metaData);
+        closePageFile(&fh);
+        return RC_WRITE_FAILED;
+    }
+
+    rc = readBlock(targetPage, &fh, pageData);
+    if (rc != RC_OK && rc != RC_READ_NON_EXISTING_PAGE) {
+        free(metaData);
+        free(pageData);
+        closePageFile(&fh);
+        return rc;
+    }
+
+    // Write record to target slot
+    memcpy(pageData + (targetSlot * recordSize), record->data, recordSize);
+
+    // Write page back to disk
+    rc = writeBlock(targetPage, &fh, pageData);
+    if (rc != RC_OK) {
+        free(metaData);
+        free(pageData);
+        closePageFile(&fh);
+        return rc;
+    }
+
+    // Update number of tuples
+    numTuples++;
     printf("numTuples after increment: %d\n", numTuples);
 
-    // Step 4: Calculate slot size and slots per page
-    int slotSize = getRecordSize(rel->schema);
-    if (slotSize <= 0) {
-        closePageFile(&fh);
-        return -1;
-    }
-    int slotsPerPage = PAGE_SIZE / slotSize;
+    memcpy(metaData, &numTuples, sizeof(int));
 
-    // Step 5: Find an appropriate page with free space
-    int pageNum = 2;  // Start from page 2
-    char *pageBuffer = (char *) malloc(PAGE_SIZE);
-    bool slotFound = false;
-    int slot;
-
-    while (!slotFound) {
-        if (ensureCapacity(pageNum + 1, &fh) != RC_OK) {
-            free(pageBuffer);
-            closePageFile(&fh);
-            return RC_WRITE_FAILED;
-        }
-
-        rc = readBlock(pageNum, &fh, pageBuffer);
-        if (rc != RC_OK) {
-            free(pageBuffer);
-            closePageFile(&fh);
-            return rc;
-        }
-
-        // Find an empty slot in the page
-        for (slot = 0; slot < slotsPerPage; slot++) {
-            if (pageBuffer[slot * slotSize] == '\0') {  // Check if slot is empty
-                slotFound = true;
-                break;
-            }
-        }
-
-        if (!slotFound) {
-            pageNum++;
-        }
-    }
-
-    // Debugging: Print page and slot where record will be written
-    // printf("Writing to page %d, slot %d\n", pageNum, slot);
-
-    // Step 6: Write the record data into the found slot
-    // ------------- DEBUGGING -------------------
-    // printf("Record data to be written: ");
-    // for (int i = 0; i < slotSize; i++) {
-    //     printf("%02x ", (unsigned char)record->data[i]);
-    // }
-    // printf("\n");
-    // ------------- DEBUGGING -------------------
-
-    memcpy(pageBuffer + slot * slotSize, record->data, slotSize);
-    rc = writeBlock(pageNum, &fh, pageBuffer);
-    if(rc != RC_OK) {
-        free(pageBuffer);
-    }
-    // ------------- DEBUGGING -------------------
-    // Confirm data is written by reading it back (for debugging)
-    // char *verifyBuffer = (char *) malloc(PAGE_SIZE);
-    // rc = readBlock(pageNum, &fh, verifyBuffer);
-    // printf("Data in page %d, slot %d after write: ", pageNum, slot);
-    // for (int i = slot * slotSize; i < (slot + 1) * slotSize; i++) {
-    //     printf("%02x ", (unsigned char)verifyBuffer[i]);
-    // }
-    // printf("\n");
-    // free(verifyBuffer);
-    // // ------------- DEBUGGING -------------------
-    free(pageBuffer);
-
+    // Write updated metadata
+    rc = writeBlock(1, &fh, metaData);
     if (rc != RC_OK) {
+        free(metaData);
+        free(pageData);
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 7: Set the Record ID
-    record->id.page = pageNum;
-    record->id.slot = slot;
+    // Set record ID
+    record->id.page = targetPage;
+    record->id.slot = targetSlot;
+    printf("Page:  %d\n", targetPage);
+    printf("Slot:  %d\n", targetSlot);
 
-    // Step 8: Close the file
-    // rc = closePageFile(&fh);
-    // if (rc != RC_OK) return rc;
+    // Cleanup
+    free(metaData);
+    free(pageData);
+    closePageFile(&fh);
 
     return RC_OK;
 }
+
+
 
 
 // Delete a record with the specified RID
@@ -640,34 +612,54 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
     SM_FileHandle fh;
     RC rc;
 
-    // Step 1: Open the table file
+    // Open the file
     rc = openPageFile(rel->name, &fh);
     if (rc != RC_OK) return rc;
 
-    // Step 2: Read the page where the record resides
-    char *pageBuffer = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(id.page, &fh, pageBuffer);
+    // Calculate record size
+    int recordSize = getRecordSize(rel->schema);
+
+    // Allocate buffer for page
+    char *pageData = (char *)calloc(PAGE_SIZE, 1);
+    if (pageData == NULL) {
+        closePageFile(&fh);
+        return RC_WRITE_FAILED;
+    }
+
+    // Read the page containing the record
+    rc = readBlock(id.page, &fh, pageData);
     if (rc != RC_OK) {
-        free(pageBuffer);
+        free(pageData);
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 3: Calculate the slot size and locate the record's position in the page
-    int slotSize = getRecordSize(rel->schema);
-    char *recordSlot = pageBuffer + id.slot * slotSize;
+    // Calculate offset for the record
+    int offset = id.slot * recordSize;
 
-    // Step 4: Copy the record data from the page into the provided Record structure
-    record->id = id; // Set the RID in the record structure
-    memcpy(record->data, recordSlot, slotSize); // Copy data to record
+    // Allocate memory for record data if not already allocated
+    if (record->data == NULL) {
+        record->data = (char *)malloc(recordSize);
+        if (record->data == NULL) {
+            free(pageData);
+            closePageFile(&fh);
+            return RC_WRITE_FAILED;
+        }
+    }
 
-    // Step 5: Clean up and close the file
-    free(pageBuffer); // Free the page buffer
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // Copy record data
+    memcpy(record->data, pageData + offset, recordSize);
+
+    // Set record ID
+    record->id = id;
+
+    // Cleanup
+    free(pageData);
+    closePageFile(&fh);
 
     return RC_OK;
 }
+
 
 // scans
 
