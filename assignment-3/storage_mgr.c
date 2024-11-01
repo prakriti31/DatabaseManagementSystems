@@ -93,7 +93,7 @@ RC readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
     if (file == NULL) {
         return RC_FILE_NOT_FOUND;
     }
-    if(pageNum > fHandle -> totalNumPages || pageNum < 0) {
+    if(pageNum >= fHandle -> totalNumPages || pageNum < 0) {
         return RC_READ_NON_EXISTING_PAGE;
     }
 

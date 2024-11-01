@@ -14,178 +14,294 @@ RC initRecordManager (void *mgmtData) {
     return 0;
 }
 RC shutdownRecordManager (){return RC_OK;}
+
+
+// ---------------- DEBUGGING START ------------
+
+// RC createTable(char *name, Schema *schema) {
+//     // Step 1: Construct the file name for the table
+//     char local_fname[64] = {'\0'};
+//     strcat(local_fname, name);
+//     strcat(local_fname, ".bin");
+//
+//     // Step 2: Create the page file for the table
+//     RC rc = createPageFile(local_fname);
+//     if (rc != RC_OK) {
+//         return rc;  // Return error if page file creation fails
+//     }
+//
+//     // Step 3: Initialize buffer pool or page manager
+//     BM_BufferPool *buffer_pool = MAKE_POOL();
+//     rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
+//     if (rc != RC_OK) {
+//         return rc;  // Return error if buffer pool initialization fails
+//     }
+//
+//     // Step 4: Serialize the schema
+//     char *serializedSchema = serializeSchema(schema);
+//     if (serializedSchema == NULL) {
+//         shutdownBufferPool(buffer_pool);
+//         return -1;  // Handle serialization failure
+//     }
+//
+//     // Step 5: Write serialized schema to the first page of the file
+//     BM_PageHandle *page = MAKE_PAGE_HANDLE();
+//     rc = pinPage(buffer_pool, page, 0);  // First page reserved for schema
+//     if (rc != RC_OK) {
+//         free(serializedSchema);
+//         shutdownBufferPool(buffer_pool);
+//         return rc;  // Handle pinning error
+//     }
+//
+//     // Copy serialized schema data into the page's data field
+//     strncpy(page->data, serializedSchema, PAGE_SIZE);  // Assuming schema fits within one page
+//     markDirty(buffer_pool, page);  // Mark page as dirty to ensure it's written to disk
+//
+//     // Step 6: Unpin and cleanup
+//     unpinPage(buffer_pool, page);
+//     free(serializedSchema);  // Free the serialized schema after writing
+//     shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
+//
+//     return RC_OK;  // Successfully created the table
+// }
+
+// ------------------- DEBUGGING END -----------------
+
+// ------------------- UPDATED CREATE-TABLE FN -------------------
+
 RC createTable(char *name, Schema *schema) {
-    SM_FileHandle fh;
-    RC rc;
+    // Step 1: Construct the file name for the table
+    char local_fname[64] = {'\0'};
+    strcat(local_fname, name);
+    strcat(local_fname, ".bin");
 
-    // Step 1: Create a new page file for the table
-    rc = createPageFile(name);
-    if (rc != RC_OK) return rc;
-
-    // Step 2: Open the newly created file
-    rc = openPageFile(name, &fh);
-    if (rc != RC_OK) return rc;
-
-    // Step 3: Serialize schema information using serializeSchema from rm_serializer.c
-    char *serializedSchema = serializeSchema(schema);
-    int schemaSize = strlen(serializedSchema) + 1; // include null terminator
-
-    // Step 4: Ensure schema fits within a single page
-    if (schemaSize > PAGE_SIZE) {
-        free(serializedSchema);
-        closePageFile(&fh);
-        return RC_WRITE_FAILED;
-    }
-
-    // Step 5: Write serialized schema to the first page using a buffer
-    char *pageBuffer = (char *) calloc(PAGE_SIZE, sizeof(char)); // clear the buffer
-    memcpy(pageBuffer, serializedSchema, schemaSize);
-    rc = writeBlock(0, &fh, pageBuffer);
-    free(pageBuffer);
-    free(serializedSchema);
-
+    // Step 2: Create the page file for the table
+    RC rc = createPageFile(local_fname);
     if (rc != RC_OK) {
-        closePageFile(&fh);
-        return rc;
+        return rc;  // Return error if page file creation fails
     }
 
-    // Step 6: Close the file after initializing schema info
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // Step 3: Initialize buffer pool for managing pages
+    BM_BufferPool *buffer_pool = MAKE_POOL();
+    rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
+    if (rc != RC_OK) {
+        return rc;  // Return error if buffer pool initialization fails
+    }
 
-    return RC_OK;
+    // Step 4: Serialize the schema
+    char *serializedSchema = serializeSchema(schema);
+    if (serializedSchema == NULL) {
+        shutdownBufferPool(buffer_pool);
+        return -1;  // Handle serialization failure
+    }
+
+    // Step 5: Pin the first page, write serialized schema to it, and mark it as dirty
+    BM_PageHandle *page = MAKE_PAGE_HANDLE();
+    rc = pinPage(buffer_pool, page, 0);  // First page reserved for schema
+    if (rc != RC_OK) {
+        free(serializedSchema);
+        shutdownBufferPool(buffer_pool);
+        return rc;  // Handle pinning error
+    }
+
+    // Copy serialized schema data into the page's data field
+    strncpy(page->data, serializedSchema, PAGE_SIZE);  // Assuming schema fits within one page
+    markDirty(buffer_pool, page);  // Mark page as dirty to ensure it's written to disk
+
+    // Step 6: Unpin the page and force it to disk, then free resources
+    rc = unpinPage(buffer_pool, page);
+    if (rc != RC_OK) {
+        free(serializedSchema);
+        shutdownBufferPool(buffer_pool);
+        return rc;  // Handle unpinning error
+    }
+
+    rc = forcePage(buffer_pool, page);  // Ensure data is written to disk
+    if (rc != RC_OK) {
+        free(serializedSchema);
+        shutdownBufferPool(buffer_pool);
+        return rc;  // Handle force page error
+    }
+
+    // Clean up resources
+    free(serializedSchema);  // Free the serialized schema after writing
+    shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
+
+    return RC_OK;  // Successfully created the table
 }
 
-// Function to deserialize schema data from a page buffer
+
+// ------------------- UPDATED CREATE-TABLE FN -------------------
+
+
 Schema *deserializeSchema(char *data) {
-    Schema *schema = (Schema *) malloc(sizeof(Schema));
-    if (!schema) return NULL;
-
-    int typeLength = 0;
-    char *ptr = data;
-    char attrName[50];  // temporary buffer for attribute names
-
-    // Step 1: Parse the number of attributes
-    sscanf(ptr, "Schema with <%d> attributes", &schema->numAttr);
-
-    // Move ptr to start of attribute list
-    ptr = strchr(ptr, '(') + 1;
-
-    // Step 2: Allocate memory for attributes
-    schema->attrNames = (char **) malloc(sizeof(char *) * schema->numAttr);
-    schema->dataTypes = (DataType *) malloc(sizeof(DataType) * schema->numAttr);
-    schema->typeLength = (int *) malloc(sizeof(int) * schema->numAttr);
-
-    if (!schema->attrNames || !schema->dataTypes || !schema->typeLength) {
-        free(schema->attrNames);
-        free(schema->dataTypes);
-        free(schema->typeLength);
-        free(schema);
+    if (data == NULL) {
         return NULL;
     }
 
-    // Step 3: Read attribute names and types
-    for (int i = 0; i < schema->numAttr; i++) {
-        int scanned = sscanf(ptr, "%49[^:]: %s", attrName, attrName + strlen(attrName) + 1);
-        if (scanned != 2) {
-            // Error in parsing; clean up and return NULL
-            for (int j = 0; j < i; j++) free(schema->attrNames[j]);
-            free(schema->attrNames);
-            free(schema->dataTypes);
-            free(schema->typeLength);
-            free(schema);
-            return NULL;
-        }
-
-        schema->attrNames[i] = strdup(attrName);
-        char *typeStr = attrName + strlen(attrName) + 1;
-
-        if (strcmp(typeStr, "INT") == 0) {
-            schema->dataTypes[i] = DT_INT;
-            schema->typeLength[i] = 0;
-        } else if (strcmp(typeStr, "FLOAT") == 0) {
-            schema->dataTypes[i] = DT_FLOAT;
-            schema->typeLength[i] = 0;
-        } else if (strcmp(typeStr, "BOOL") == 0) {
-            schema->dataTypes[i] = DT_BOOL;
-            schema->typeLength[i] = 0;
-        } else if (sscanf(typeStr, "STRING[%d]", &typeLength) == 1) {
-            schema->dataTypes[i] = DT_STRING;
-            schema->typeLength[i] = typeLength;
-        }
-
-        // Move ptr past the parsed attribute
-        ptr = strchr(ptr, ',');
-        if (ptr != NULL) ptr += 2; // skip ", "
+    Schema *schema = (Schema *)malloc(sizeof(Schema));
+    if (schema == NULL) {
+        return NULL;  // Memory allocation failed
     }
 
-    // Step 4: Parse key attributes
-    char *keyStart = strstr(data, "with keys: (");
-    if (keyStart) {
-        keyStart += strlen("with keys: (");
-        schema->keySize = 0;
+    // Initial parsing: locate the number of attributes
+    char *pos = strstr(data, "with <");
+    if (pos == NULL) return NULL;
+    pos += strlen("with <");
 
-        // Count the number of keys
-        char *keyPtr = keyStart;
-        while ((keyPtr = strchr(keyPtr, ',')) != NULL) {
-            schema->keySize++;
-            keyPtr++;
+    // Extract number of attributes
+    sscanf(pos, "%d", &schema->numAttr);
+
+    // Allocate memory for schema fields based on the number of attributes
+    schema->attrNames = (char **)malloc(3 * sizeof(char *));
+    schema->dataTypes = (DataType *)malloc(schema->numAttr * sizeof(DataType));
+    schema->typeLength = (int *)malloc(schema->numAttr * sizeof(int));
+
+    // Move to the attribute list and parse each attribute
+    pos = strchr(pos, '(') + 1;
+    for (int i = 0; i < schema->numAttr; i++) {
+        // Read attribute name until colon
+        char attrName[50];
+        sscanf(pos, " %[^:]:", attrName);
+
+        // ------------- DEBUGGING START ----------------
+
+        schema->attrNames[i] = (char *)malloc(strlen(attrName) + 1);
+        if (schema->attrNames[i] == NULL) {
+            // Handle memory allocation failure
+            fprintf(stderr, "Memory allocation failed for attrNames[%d]\n", i);
+            return NULL;
         }
-        schema->keySize++; // Account for the last key
+        strcpy(schema->attrNames[i], attrName);
+        printf("Parsed attribute name: %s\n", schema->attrNames[i]);
 
-        schema->keyAttrs = (int *) malloc(sizeof(int) * schema->keySize);
 
-        keyPtr = keyStart;
-        for (int i = 0; i < schema->keySize; i++) {
-            sscanf(keyPtr, "%49[^,)]", attrName);
-            keyPtr = strchr(keyPtr, ',');
-            if (keyPtr != NULL) keyPtr += 2;
 
-            // Find the index of each key attribute
-            for (int j = 0; j < schema->numAttr; j++) {
-                if (strcmp(schema->attrNames[j], attrName) == 0) {
-                    schema->keyAttrs[i] = j;
-                    break;
-                }
+        // ------------- DEBUGGING END ----------------
+
+        // Move to the type and parse it
+        pos = strchr(pos, ':') + 2;  // Move past ': '
+        if (strncmp(pos, "INT", 3) == 0) {
+            schema->dataTypes[i] = DT_INT;
+            schema->typeLength[i] = 0;
+            pos += 3;  // Move past "INT"
+        } else if (strncmp(pos, "FLOAT", 5) == 0) {
+            schema->dataTypes[i] = DT_FLOAT;
+            schema->typeLength[i] = 0;
+            pos += 5;  // Move past "FLOAT"
+        } else if (strncmp(pos, "BOOL", 4) == 0) {
+            schema->dataTypes[i] = DT_BOOL;
+            schema->typeLength[i] = 0;
+            pos += 4;  // Move past "BOOL"
+        } else if (strncmp(pos, "STRING", 6) == 0) {
+            schema->dataTypes[i] = DT_STRING;
+            pos += 6;  // Move past "STRING"
+
+            // Extract string length within brackets
+            if (*pos == '[') {
+                int strLength;
+                sscanf(pos, "[%d]", &strLength);
+                schema->typeLength[i] = strLength;
+                pos = strchr(pos, ']') + 1;  // Move past ']'
             }
         }
+        printf("Schema TypeLength %d\n", schema->typeLength[i]);
+        printf("Parsed DataType: %d\n", schema->dataTypes[i]);
+        // Move to next attribute or end of list
+        if (i < schema->numAttr - 1) {
+            pos = strchr(pos, ',');
+            if (pos != NULL) {
+                pos++;  // Move to the start of the next attribute
+            } else {
+                fprintf(stderr, "Error: Expected ',' after attribute '%s'\n", attrName);
+                return NULL;
+            }
+        }
+
+    }
+
+    // Parse the keys section
+    pos = strstr(pos, "with keys: (");
+    if (pos == NULL) {
+        fprintf(stderr, "Error: Expected 'with keys: (' section.\n");
+        return NULL;
+    }
+    pos += strlen("with keys: (");  // Move past "with keys: ("
+
+    // Allocate memory for a single key
+    schema->keySize = 1;
+    schema->keyAttrs = (int *)malloc(schema->keySize * sizeof(int));
+    if (schema->keyAttrs == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed for key attributes.\n");
+        return NULL;
+    }
+
+    // Parse the single key attribute name
+    char keyName[50];
+    sscanf(pos, " %[^)]", keyName);  // Read key name until the closing parenthesis
+
+    // Find attribute index in attrNames
+    schema->keyAttrs[0] = -1;  // Initialize with an invalid index to check if we find the key
+    for (int j = 0; j < schema->numAttr; j++) {
+        if (strcmp(schema->attrNames[j], keyName) == 0) {
+            schema->keyAttrs[0] = j;  // Set the index of the key attribute
+            break;
+        }
+    }
+
+    // Check if the key was found
+    if (schema->keyAttrs[0] == -1) {
+        fprintf(stderr, "Error: Key attribute '%s' not found in attribute list.\n", keyName);
+        return NULL;
     }
 
     return schema;
 }
 
+
+
+
 RC openTable(RM_TableData *rel, char *name) {
-    SM_FileHandle fh;
-    RC rc;
+    // Step 1: Construct the file name for the table
+    char local_fname[64] = {'\0'};
+    strcat(local_fname, name);
+    strcat(local_fname, ".bin");
 
-    // Step 1: Open the page file for the table
-    rc = openPageFile(name, &fh);
-    if (rc != RC_OK) return rc;
-
-    // Step 2: Read the first page containing the serialized schema
-    char *data = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(0, &fh, data);
+    // Step 2: Initialize buffer pool
+    BM_BufferPool *buffer_pool = MAKE_POOL();
+    RC rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
     if (rc != RC_OK) {
-        free(data);
-        closePageFile(&fh);
-        return rc;
+        return rc;  // Return error if buffer pool initialization fails
     }
 
-    // Step 3: Deserialize schema using helper from rm_serializer.c
-    Schema *schema = deserializeSchema(data);  // deserialize function in rm_serializer if available
-    free(data);  // Free the buffer holding raw schema data
+    // Step 3: Pin the first page to read the schema
+    BM_PageHandle *page = MAKE_PAGE_HANDLE();
+    rc = pinPage(buffer_pool, page, 0);  // First page contains schema
+    if (rc != RC_OK) {
+        shutdownBufferPool(buffer_pool);
+        return rc;  // Handle pinning error
+    }
 
-    // Step 4: Initialize RM_TableData
-    rel->name = name;
-    rel->schema = schema;
-    rel->mgmtData = NULL; // This could be initialized based on specific requirements
+    // Step 4: Deserialize schema from page data
+    Schema *schema = deserializeSchema(page->data);
+    if (schema == NULL) {
+        unpinPage(buffer_pool, page);
+        shutdownBufferPool(buffer_pool);
+        return -1;  // Handle deserialization failure
+    }
 
-    // Step 5: Close the file
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // Step 5: Populate the RM_TableData structure
+    rel->name = strdup(name);   // Duplicate name string for persistence
+    rel->schema = schema;       // Assign the deserialized schema
+    rel->mgmtData = buffer_pool;  // Store buffer pool in mgmtData for future access
 
-    return RC_OK;
+    // Step 6: Unpin the page and clean up
+    unpinPage(buffer_pool, page);
+
+    return RC_OK;  // Successfully opened the table
 }
+
+
 RC closeTable(RM_TableData *rel) {
     // Step 1: Free the schema if it exists
     if (rel->schema != NULL) {
@@ -262,9 +378,12 @@ RC insertRecord(RM_TableData *rel, Record *record) {
 
     // Step 3: Get the current tuple count and increment it for the new record
     int numTuples;
-    memcpy(&numTuples, metaData, sizeof(int));
+    sscanf(metaData, "Schema with <%d> tuples", &numTuples);
     numTuples++;
-    memcpy(metaData, &numTuples, sizeof(int)); // Update metadata with new tuple count
+    char updatedMetaData[PAGE_SIZE];
+    sprintf(updatedMetaData, "Schema with <%d> tuples%s", numTuples, strchr(metaData, '>') + 1); // Update metadata with new tuple count
+    strncpy(metaData, updatedMetaData, PAGE_SIZE - 1);
+    metaData[PAGE_SIZE - 1] = '\0';
     rc = writeBlock(0, &fh, metaData);
     free(metaData); // Free metadata buffer
 
@@ -275,7 +394,14 @@ RC insertRecord(RM_TableData *rel, Record *record) {
 
     // Step 4: Calculate the size of each slot based on the schema
     int slotSize = getRecordSize(rel->schema);
+    if (slotSize <= 0) {
+        // Handle error: slotSize must be greater than 0
+        closePageFile(&fh);
+        return -1;
+    }
+
     int slotsPerPage = PAGE_SIZE / slotSize;
+
 
     // Step 5: Find an appropriate page with free space
     int pageNum = 1;
@@ -526,10 +652,27 @@ RC freeRecord(Record *record) {
 int getRecordSize(Schema *schema) {
     int size = 0;
     for (int i = 0; i < schema->numAttr; i++) {
-        size += (schema->dataTypes[i] == DT_STRING) ? schema->typeLength[i] : sizeof(int);
+        switch (schema->dataTypes[i]) {
+            case DT_INT:
+                size += sizeof(int);
+            break;
+            case DT_FLOAT:
+                size += sizeof(float);
+            break;
+            case DT_BOOL:
+                size += sizeof(bool);
+            break;
+            case DT_STRING:
+                size += schema->typeLength[i]; // Ensure typeLength is set for strings
+            break;
+            default:
+                // Handle unknown data type if necessary
+                    break;
+        }
     }
     return size;
 }
+
 
 // Helper function to calculate the offset of an attribute in the record data
 static int attrOffset(Schema *schema, int attrNum) {
