@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "record_mgr.h"
+
+#include <limits.h>
+
 #include "buffer_mgr.h"
 #include "storage_mgr.h"
 #include "tables.h"
@@ -73,7 +76,7 @@ RC createTable(char *name, Schema *schema) {
     // Step 1: Construct the file name for the table
     char local_fname[64] = {'\0'};
     strcat(local_fname, name);
-    strcat(local_fname, ".bin");
+    // strcat(local_fname, ".bin");
 
     // Step 2: Create the page file for the table
     RC rc = createPageFile(local_fname);
@@ -122,9 +125,19 @@ RC createTable(char *name, Schema *schema) {
         shutdownBufferPool(buffer_pool);
         return rc;  // Handle force page error
     }
+    free(serializedSchema);
 
+    int numTuples = 0;
+    rc = pinPage(buffer_pool, page, 1);
+    if (rc != RC_OK) {
+        shutdownBufferPool(buffer_pool);
+        return rc;  // Handle pinning error
+    }
+    memcpy(page->data, &numTuples, sizeof(int));
+    markDirty(buffer_pool, page);
+    unpinPage(buffer_pool, page);
+    forcePage(buffer_pool, page);
     // Clean up resources
-    free(serializedSchema);  // Free the serialized schema after writing
     shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
 
     return RC_OK;  // Successfully created the table
@@ -265,7 +278,7 @@ RC openTable(RM_TableData *rel, char *name) {
     // Step 1: Construct the file name for the table
     char local_fname[64] = {'\0'};
     strcat(local_fname, name);
-    strcat(local_fname, ".bin");
+    // strcat(local_fname, ".bin");
 
     // Step 2: Initialize buffer pool
     BM_BufferPool *buffer_pool = MAKE_POOL();
@@ -338,7 +351,7 @@ int getNumTuples(RM_TableData *rel) {
 
     // Allocate a buffer for reading the first page (metadata page)
     char *data = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(0, &fh, data);
+    rc = readBlock(1, &fh, data);
     if (rc != RC_OK) {
         free(data);
         closePageFile(&fh);
@@ -360,6 +373,13 @@ int getNumTuples(RM_TableData *rel) {
 
 // handling records in a table
 RC insertRecord(RM_TableData *rel, Record *record) {
+    // --------------- DEBUGGING -------------------
+    printf("Entering insertRecord, record data to be inserted: ");
+    for (int i = 0; i < getRecordSize(rel->schema); i++) {
+        printf("%02x ", record->data[i] & 0xff);
+    }
+    printf("\n");
+    // --------------- DEBUGGING -------------------
     SM_FileHandle fh;
     RC rc;
 
@@ -367,44 +387,42 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     rc = openPageFile(rel->name, &fh);
     if (rc != RC_OK) return rc;
 
-    // Step 2: Read the first page (metadata) to get the tuple count
-    char *metaData = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(0, &fh, metaData);
+    // Step 2: Read and update numTuples in page 1
+    char *data = (char *) malloc(PAGE_SIZE);
+    rc = readBlock(1, &fh, data);
     if (rc != RC_OK) {
-        free(metaData);
+        free(data);
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 3: Get the current tuple count and increment it for the new record
+    // Debugging: Print the current tuple count
     int numTuples;
-    sscanf(metaData, "Schema with <%d> tuples", &numTuples);
+    memcpy(&numTuples, data, sizeof(int));
+    printf("numTuples before increment: %d\n", numTuples);
+
+    // Increment tuple count and update it in page 1
     numTuples++;
-    char updatedMetaData[PAGE_SIZE];
-    sprintf(updatedMetaData, "Schema with <%d> tuples%s", numTuples, strchr(metaData, '>') + 1); // Update metadata with new tuple count
-    strncpy(metaData, updatedMetaData, PAGE_SIZE - 1);
-    metaData[PAGE_SIZE - 1] = '\0';
-    rc = writeBlock(0, &fh, metaData);
-    free(metaData); // Free metadata buffer
+    memcpy(data, &numTuples, sizeof(int));
+    rc = writeBlock(1, &fh, data);
+    free(data);
 
     if (rc != RC_OK) {
         closePageFile(&fh);
         return rc;
     }
+    printf("numTuples after increment: %d\n", numTuples);
 
-    // Step 4: Calculate the size of each slot based on the schema
+    // Step 4: Calculate slot size and slots per page
     int slotSize = getRecordSize(rel->schema);
     if (slotSize <= 0) {
-        // Handle error: slotSize must be greater than 0
         closePageFile(&fh);
         return -1;
     }
-
     int slotsPerPage = PAGE_SIZE / slotSize;
 
-
     // Step 5: Find an appropriate page with free space
-    int pageNum = 1;
+    int pageNum = 2;  // Start from page 2
     char *pageBuffer = (char *) malloc(PAGE_SIZE);
     bool slotFound = false;
     int slot;
@@ -425,28 +443,53 @@ RC insertRecord(RM_TableData *rel, Record *record) {
 
         // Find an empty slot in the page
         for (slot = 0; slot < slotsPerPage; slot++) {
-            if (pageBuffer[slot * slotSize] == '\0') { // Check if slot is empty
+            if (pageBuffer[slot * slotSize] == '\0') {  // Check if slot is empty
                 slotFound = true;
                 break;
             }
         }
 
         if (!slotFound) {
-            pageNum++; // Move to next page if no free slot is found
+            pageNum++;
         }
     }
 
+    // Debugging: Print page and slot where record will be written
+    printf("Writing to page %d, slot %d\n", pageNum, slot);
+
     // Step 6: Write the record data into the found slot
+    // ------------- DEBUGGING -------------------
+    // printf("Record data to be written: ");
+    // for (int i = 0; i < slotSize; i++) {
+    //     printf("%02x ", (unsigned char)record->data[i]);
+    // }
+    // printf("\n");
+    // ------------- DEBUGGING -------------------
+
     memcpy(pageBuffer + slot * slotSize, record->data, slotSize);
     rc = writeBlock(pageNum, &fh, pageBuffer);
-    free(pageBuffer); // Free page buffer
+    if(rc != RC_OK) {
+        free(pageBuffer);
+    }
+    // ------------- DEBUGGING -------------------
+    // Confirm data is written by reading it back (for debugging)
+    // char *verifyBuffer = (char *) malloc(PAGE_SIZE);
+    // rc = readBlock(pageNum, &fh, verifyBuffer);
+    // printf("Data in page %d, slot %d after write: ", pageNum, slot);
+    // for (int i = slot * slotSize; i < (slot + 1) * slotSize; i++) {
+    //     printf("%02x ", (unsigned char)verifyBuffer[i]);
+    // }
+    // printf("\n");
+    // free(verifyBuffer);
+    // // ------------- DEBUGGING -------------------
+    free(pageBuffer);
 
     if (rc != RC_OK) {
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 7: Set the Record ID with the page number and slot number
+    // Step 7: Set the Record ID
     record->id.page = pageNum;
     record->id.slot = slot;
 
@@ -456,6 +499,7 @@ RC insertRecord(RM_TableData *rel, Record *record) {
 
     return RC_OK;
 }
+
 
 // Delete a record with the specified RID
 RC deleteRecord(RM_TableData *rel, RID id) {
@@ -693,6 +737,7 @@ static int attrOffset(Schema *schema, int attrNum) {
             break;
         }
     }
+    printf("Calculated offset for attribute %d: %d\n", attrNum, offset);
     return offset;
 }
 
@@ -729,26 +774,68 @@ RC getAttr(Record *record, Schema *schema, int attrNum, Value **value) {
 }
 
 // Set the attribute value in a record
+// RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
+//     // Calculate the offset of the attribute in the record's data
+//     int offset = attrOffset(schema, attrNum);
+//     char *attrData = record->data + offset;
+//
+//     // Copy the attribute data based on the attribute's data type
+//     switch (schema->dataTypes[attrNum]) {
+//         case DT_INT:
+//             memcpy(attrData, &value->v.intV, sizeof(int));
+//         break;
+//         case DT_FLOAT:
+//             memcpy(attrData, &value->v.floatV, sizeof(float));
+//         break;
+//         case DT_BOOL:
+//             memcpy(attrData, &value->v.boolV, sizeof(bool));
+//         break;
+//         case DT_STRING:
+//             strncpy(attrData, value->v.stringV, schema->typeLength[attrNum]);
+//         break;
+//     }
+//
+//     return RC_OK;
+// }
+
 RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
     // Calculate the offset of the attribute in the record's data
     int offset = attrOffset(schema, attrNum);
     char *attrData = record->data + offset;
 
+    // Debug: Print calculated offset
+    printf("Setting attribute %d at offset %d\n", attrNum, offset);
+
     // Copy the attribute data based on the attribute's data type
     switch (schema->dataTypes[attrNum]) {
         case DT_INT:
             memcpy(attrData, &value->v.intV, sizeof(int));
+        printf("Value set for INT: %d\n", value->v.intV);
         break;
         case DT_FLOAT:
             memcpy(attrData, &value->v.floatV, sizeof(float));
+        printf("Value set for FLOAT: %f\n", value->v.floatV);
         break;
         case DT_BOOL:
             memcpy(attrData, &value->v.boolV, sizeof(bool));
+        printf("Value set for BOOL: %d\n", value->v.boolV);
         break;
         case DT_STRING:
             strncpy(attrData, value->v.stringV, schema->typeLength[attrNum]);
+        // Optional: null-terminate if needed
+        if (schema->typeLength[attrNum] > 0) {
+            attrData[schema->typeLength[attrNum] - 1] = '\0';
+        }
+        printf("Value set for STRING: %.*s\n", schema->typeLength[attrNum], value->v.stringV);
         break;
     }
+
+    // Debug: Print current state of record->data after setting this attribute
+    printf("record->data after setting attribute %d: ", attrNum);
+    for (int i = 0; i < getRecordSize(schema); i++) {
+        printf("%02x ", record->data[i] & 0xff);  // Print in hex for clarity
+    }
+    printf("\n");
 
     return RC_OK;
 }

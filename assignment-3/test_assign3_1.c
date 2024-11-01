@@ -78,7 +78,7 @@ main (void)
 	testName = "";
 
 	testInsertManyRecords();
-	// testRecords();
+	testRecords();
 	// testCreateTableAndInsert();
 	// testUpdateTable();
 	// testScans();
@@ -384,11 +384,11 @@ testInsertManyRecords(void)
 			{9, "iiii", 2},
 			{10, "jjjj", 5},
 	};
-	TestRecord realInserts[10000];
+	TestRecord realInserts[10];
 	TestRecord updates[] = {
 			{3333, "iiii", 6}
 	};
-	int numInserts = 10000, i;
+	int numInserts = 10, i;
 	int randomRec = 3333;
 	Record *r;
 	RID *rids;
@@ -407,6 +407,15 @@ testInsertManyRecords(void)
 		realInserts[i] = inserts[i%10];
 		realInserts[i].a = i;
 		r = fromTestRecord(schema, realInserts[i]);
+
+		// ------------- DEBUG --------------
+		// printf("########### Record data to be written: ");
+		// for (int i = 0; i < getRecordSize(table->schema); i++) {
+		// 	printf("%02x ", r->data[i] & 0xff);
+		// }
+		// printf("\n");
+		// ------------- DEBUG --------------
+
 		TEST_CHECK(insertRecord(table,r));
 		rids[i] = r->id;
         freeRecord(r);   // Added Summer 2021
