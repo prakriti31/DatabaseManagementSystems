@@ -93,6 +93,7 @@ RC createTable(char *name, Schema *schema) {
 
     // Step 4: Serialize the schema
     char *serializedSchema = serializeSchema(schema);
+    // printf("Serialized schema: %s\n", serializedSchema);
     if (serializedSchema == NULL) {
         shutdownBufferPool(buffer_pool);
         return -1;  // Handle serialization failure
@@ -137,8 +138,30 @@ RC createTable(char *name, Schema *schema) {
     markDirty(buffer_pool, page);
     unpinPage(buffer_pool, page);
     forcePage(buffer_pool, page);
+
+    // ----------------------- DEBUGGING -----------------------
+    SM_FileHandle fh;
+    char buffer[PAGE_SIZE];
+    if (openPageFile(local_fname, &fh) == RC_OK) {
+        if (readBlock(0, &fh, buffer) == RC_OK) {
+            printf("Contents of page 0 on disk: %s\n", buffer);
+        } else {
+            printf("Failed to read page 0 from disk\n");
+        }
+        closePageFile(&fh);
+    }
+    // ----------------------- DEBUGGING -----------------------
     // Clean up resources
     shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
+
+    if (openPageFile(local_fname, &fh) == RC_OK) {
+        if (readBlock(0, &fh, buffer) == RC_OK) {
+            printf("Contents of page 0 on disk (after createTable): %s\n", buffer);
+        } else {
+            printf("Failed to read page 0 from disk\n");
+        }
+        closePageFile(&fh);
+    }
 
     return RC_OK;  // Successfully created the table
 }
@@ -186,7 +209,7 @@ Schema *deserializeSchema(char *data) {
             return NULL;
         }
         strcpy(schema->attrNames[i], attrName);
-        printf("Parsed attribute name: %s\n", schema->attrNames[i]);
+        // printf("Parsed attribute name: %s\n", schema->attrNames[i]);
 
 
 
@@ -218,8 +241,8 @@ Schema *deserializeSchema(char *data) {
                 pos = strchr(pos, ']') + 1;  // Move past ']'
             }
         }
-        printf("Schema TypeLength %d\n", schema->typeLength[i]);
-        printf("Parsed DataType: %d\n", schema->dataTypes[i]);
+        // printf("Schema TypeLength %d\n", schema->typeLength[i]);
+        // printf("Parsed DataType: %d\n", schema->dataTypes[i]);
         // Move to next attribute or end of list
         if (i < schema->numAttr - 1) {
             pos = strchr(pos, ',');
@@ -276,6 +299,7 @@ Schema *deserializeSchema(char *data) {
 
 RC openTable(RM_TableData *rel, char *name) {
     // Step 1: Construct the file name for the table
+    SM_FileHandle fh;
     char local_fname[64] = {'\0'};
     strcat(local_fname, name);
     // strcat(local_fname, ".bin");
@@ -286,20 +310,30 @@ RC openTable(RM_TableData *rel, char *name) {
     if (rc != RC_OK) {
         return rc;  // Return error if buffer pool initialization fails
     }
-
+    forceFlushPool(buffer_pool);
     // Step 3: Pin the first page to read the schema
     BM_PageHandle *page = MAKE_PAGE_HANDLE();
     rc = pinPage(buffer_pool, page, 0);  // First page contains schema
+    //printf("Contents of page->data in openTable before deserialization: %s\n", page->data);
+
+    openPageFile(name, &fh);
+    char buffer[PAGE_SIZE];
+    //printf("Direct read from disk in openTable: %s\n", buffer);
+    closePageFile(&fh);
+
     if (rc != RC_OK) {
         shutdownBufferPool(buffer_pool);
         return rc;  // Handle pinning error
     }
 
     // Step 4: Deserialize schema from page data
-    Schema *schema = deserializeSchema(page->data);
+    //printf("Contents of page->data being passed to deserializeSchema: %s\n", buffer);
+
+    Schema *schema = deserializeSchema(buffer);
     if (schema == NULL) {
         unpinPage(buffer_pool, page);
         shutdownBufferPool(buffer_pool);
+        printf("NULL Schema\n");
         return -1;  // Handle deserialization failure
     }
 
@@ -374,11 +408,11 @@ int getNumTuples(RM_TableData *rel) {
 // handling records in a table
 RC insertRecord(RM_TableData *rel, Record *record) {
     // --------------- DEBUGGING -------------------
-    printf("Entering insertRecord, record data to be inserted: ");
-    for (int i = 0; i < getRecordSize(rel->schema); i++) {
-        printf("%02x ", record->data[i] & 0xff);
-    }
-    printf("\n");
+    // printf("Entering insertRecord, record data to be inserted: ");
+    // for (int i = 0; i < getRecordSize(rel->schema); i++) {
+    //     printf("%02x ", record->data[i] & 0xff);
+    // }
+    // printf("\n");
     // --------------- DEBUGGING -------------------
     SM_FileHandle fh;
     RC rc;
@@ -400,6 +434,7 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     int numTuples;
     memcpy(&numTuples, data, sizeof(int));
     printf("numTuples before increment: %d\n", numTuples);
+
 
     // Increment tuple count and update it in page 1
     numTuples++;
@@ -455,7 +490,7 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     }
 
     // Debugging: Print page and slot where record will be written
-    printf("Writing to page %d, slot %d\n", pageNum, slot);
+    // printf("Writing to page %d, slot %d\n", pageNum, slot);
 
     // Step 6: Write the record data into the found slot
     // ------------- DEBUGGING -------------------
@@ -494,8 +529,8 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     record->id.slot = slot;
 
     // Step 8: Close the file
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // rc = closePageFile(&fh);
+    // if (rc != RC_OK) return rc;
 
     return RC_OK;
 }
@@ -737,7 +772,7 @@ static int attrOffset(Schema *schema, int attrNum) {
             break;
         }
     }
-    printf("Calculated offset for attribute %d: %d\n", attrNum, offset);
+    // printf("Calculated offset for attribute %d: %d\n", attrNum, offset);
     return offset;
 }
 
@@ -804,21 +839,21 @@ RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
     char *attrData = record->data + offset;
 
     // Debug: Print calculated offset
-    printf("Setting attribute %d at offset %d\n", attrNum, offset);
+    // printf("Setting attribute %d at offset %d\n", attrNum, offset);
 
     // Copy the attribute data based on the attribute's data type
     switch (schema->dataTypes[attrNum]) {
         case DT_INT:
             memcpy(attrData, &value->v.intV, sizeof(int));
-        printf("Value set for INT: %d\n", value->v.intV);
+        // printf("Value set for INT: %d\n", value->v.intV);
         break;
         case DT_FLOAT:
             memcpy(attrData, &value->v.floatV, sizeof(float));
-        printf("Value set for FLOAT: %f\n", value->v.floatV);
+        // printf("Value set for FLOAT: %f\n", value->v.floatV);
         break;
         case DT_BOOL:
             memcpy(attrData, &value->v.boolV, sizeof(bool));
-        printf("Value set for BOOL: %d\n", value->v.boolV);
+        // printf("Value set for BOOL: %d\n", value->v.boolV);
         break;
         case DT_STRING:
             strncpy(attrData, value->v.stringV, schema->typeLength[attrNum]);
@@ -826,16 +861,16 @@ RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
         if (schema->typeLength[attrNum] > 0) {
             attrData[schema->typeLength[attrNum] - 1] = '\0';
         }
-        printf("Value set for STRING: %.*s\n", schema->typeLength[attrNum], value->v.stringV);
+        // printf("Value set for STRING: %.*s\n", schema->typeLength[attrNum], value->v.stringV);
         break;
     }
 
     // Debug: Print current state of record->data after setting this attribute
-    printf("record->data after setting attribute %d: ", attrNum);
-    for (int i = 0; i < getRecordSize(schema); i++) {
-        printf("%02x ", record->data[i] & 0xff);  // Print in hex for clarity
-    }
-    printf("\n");
+    // printf("record->data after setting attribute %d: ", attrNum);
+    // for (int i = 0; i < getRecordSize(schema); i++) {
+    //     printf("%02x ", record->data[i] & 0xff);  // Print in hex for clarity
+    // }
+    // printf("\n");
 
     return RC_OK;
 }
