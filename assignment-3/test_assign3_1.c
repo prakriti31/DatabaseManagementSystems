@@ -76,14 +76,14 @@ int
 main (void) 
 {
 	testName = "";
-
-	// testInsertManyRecords();
+	
 	testRecords(); // Working
 	testCreateTableAndInsert(); // Working
-	// testUpdateTable();
-	// testScans();
-	// testScansTwo();
-	// testMultipleScans();
+	testInsertManyRecords();
+	testUpdateTable();
+	testScans();
+	testScansTwo();
+	testMultipleScans();
 
 	return 0;
 }
