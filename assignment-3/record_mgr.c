@@ -91,9 +91,9 @@ RC createTable(char *name, Schema *schema) {
     char buffer[PAGE_SIZE];
     if (openPageFile(local_fname, &fh) == RC_OK) {
         if (readBlock(0, &fh, buffer) == RC_OK) {
-            printf("Contents of page 0 on disk: %s\n", buffer);
+            // printf("Contents of page 0 on disk: %s\n", buffer);
         } else {
-            printf("Failed to read page 0 from disk\n");
+            // printf("Failed to read page 0 from disk\n");
         }
         closePageFile(&fh);
     }
@@ -103,9 +103,9 @@ RC createTable(char *name, Schema *schema) {
 
     if (openPageFile(local_fname, &fh) == RC_OK) {
         if (readBlock(0, &fh, buffer) == RC_OK) {
-            printf("Contents of page 0 on disk (after createTable): %s\n", buffer);
+            // printf("Contents of page 0 on disk (after createTable): %s\n", buffer);
         } else {
-            printf("Failed to read page 0 from disk\n");
+            // printf("Failed to read page 0 from disk\n");
         }
         closePageFile(&fh);
     }
@@ -596,25 +596,108 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
 }
 
 // scans
+typedef struct ScanMgmt {
+    Expr *condition;
+    int currentPage;
+    int currentSlot;
+    bool scanStarted;
+} ScanMgmt;
 
-// Start a scan with a specific condition
 RC startScan(RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
+    // Initialize scan management data
+    ScanMgmt *mgmt = (ScanMgmt *)malloc(sizeof(ScanMgmt));
+    if (mgmt == NULL) {
+        return RC_WRITE_FAILED;
+    }
+
+    mgmt->condition = cond;
+    mgmt->currentPage = 1;  // Start from first data page (page 0 is schema, page 1 is metadata)
+    mgmt->currentSlot = -1; // Will be incremented to 0 in first next() call
+    mgmt->scanStarted = false;
+
     scan->rel = rel;
-    scan->mgmtData = cond; // Store condition for filtering
+    scan->mgmtData = mgmt;
+
     return RC_OK;
 }
 
-// Fetch the next record that satisfies the scan condition
 RC next(RM_ScanHandle *scan, Record *record) {
-    // Retrieve and filter records based on the scan condition
-    return RC_RM_NO_MORE_TUPLES;
-}
+    ScanMgmt *mgmt = (ScanMgmt *)scan->mgmtData;
+    if (mgmt == NULL) {
+        return -199;
+    }
 
-// Close an active scan
-RC closeScan(RM_ScanHandle *scan) {
-    free(scan->mgmtData); // Free any allocated memory for conditions
+    Schema *schema = scan->rel->schema;
+    int recordSize = getRecordSize(schema);
+    int slotsPerPage = (PAGE_SIZE - sizeof(int)) / recordSize;
+    bool foundRecord = false;
+
+    // Get total number of tuples
+    int totalTuples = getNumTuples(scan->rel);
+    if (totalTuples <= 0) {
+        return RC_RM_NO_MORE_TUPLES;
+    }
+
+    while (!foundRecord) {
+        // Move to next slot
+        mgmt->currentSlot++;
+
+        // If we've reached the end of the current page
+        if (mgmt->currentSlot >= slotsPerPage) {
+            mgmt->currentPage++;
+            mgmt->currentSlot = 0;
+        }
+
+        // Calculate if we've gone through all possible record positions
+        int currentPosition = ((mgmt->currentPage - 2) * slotsPerPage) + mgmt->currentSlot;
+        if (currentPosition >= totalTuples) {
+            return RC_RM_NO_MORE_TUPLES;
+        }
+
+        // Try to get the record at current position
+        RID rid = {mgmt->currentPage, mgmt->currentSlot};
+        RC rc = getRecord(scan->rel, rid, record);
+
+        // Skip if record doesn't exist or is deleted
+        if (rc != RC_OK) {
+            continue;
+        }
+
+        // If no condition, return record
+        if (mgmt->condition == NULL) {
+            foundRecord = true;
+            continue;
+        }
+
+        // Evaluate condition
+        Value *result = NULL;
+        rc = evalExpr(record, schema, mgmt->condition, &result);
+        if (rc != RC_OK) {
+            free(result);
+            continue;
+        }
+
+        // Check if condition is satisfied
+        if (result->v.boolV) {
+            foundRecord = true;
+        }
+
+        free(result);
+    }
+
     return RC_OK;
 }
+
+RC closeScan(RM_ScanHandle *scan) {
+    ScanMgmt *mgmt = (ScanMgmt *)scan->mgmtData;
+    if (mgmt != NULL) {
+        // Don't free the condition as it might be used elsewhere
+        free(mgmt);
+        scan->mgmtData = NULL;
+    }
+    return RC_OK;
+}
+
 
 // Creating schema for the table
 Schema *createSchema(int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
