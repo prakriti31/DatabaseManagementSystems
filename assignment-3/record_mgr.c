@@ -19,59 +19,6 @@ RC initRecordManager (void *mgmtData) {
 RC shutdownRecordManager (){return RC_OK;}
 
 
-// ---------------- DEBUGGING START ------------
-
-// RC createTable(char *name, Schema *schema) {
-//     // Step 1: Construct the file name for the table
-//     char local_fname[64] = {'\0'};
-//     strcat(local_fname, name);
-//     strcat(local_fname, ".bin");
-//
-//     // Step 2: Create the page file for the table
-//     RC rc = createPageFile(local_fname);
-//     if (rc != RC_OK) {
-//         return rc;  // Return error if page file creation fails
-//     }
-//
-//     // Step 3: Initialize buffer pool or page manager
-//     BM_BufferPool *buffer_pool = MAKE_POOL();
-//     rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
-//     if (rc != RC_OK) {
-//         return rc;  // Return error if buffer pool initialization fails
-//     }
-//
-//     // Step 4: Serialize the schema
-//     char *serializedSchema = serializeSchema(schema);
-//     if (serializedSchema == NULL) {
-//         shutdownBufferPool(buffer_pool);
-//         return -1;  // Handle serialization failure
-//     }
-//
-//     // Step 5: Write serialized schema to the first page of the file
-//     BM_PageHandle *page = MAKE_PAGE_HANDLE();
-//     rc = pinPage(buffer_pool, page, 0);  // First page reserved for schema
-//     if (rc != RC_OK) {
-//         free(serializedSchema);
-//         shutdownBufferPool(buffer_pool);
-//         return rc;  // Handle pinning error
-//     }
-//
-//     // Copy serialized schema data into the page's data field
-//     strncpy(page->data, serializedSchema, PAGE_SIZE);  // Assuming schema fits within one page
-//     markDirty(buffer_pool, page);  // Mark page as dirty to ensure it's written to disk
-//
-//     // Step 6: Unpin and cleanup
-//     unpinPage(buffer_pool, page);
-//     free(serializedSchema);  // Free the serialized schema after writing
-//     shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
-//
-//     return RC_OK;  // Successfully created the table
-// }
-
-// ------------------- DEBUGGING END -----------------
-
-// ------------------- UPDATED CREATE-TABLE FN -------------------
-
 RC createTable(char *name, Schema *schema) {
     // Step 1: Construct the file name for the table
     char local_fname[64] = {'\0'};
@@ -425,7 +372,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
         return RC_WRITE_FAILED;
     }
     memset(metaData, 0, PAGE_SIZE);
-
     rc = readBlock(1, &fh, metaData);
     if (rc != RC_OK) {
         free(metaData);
@@ -436,7 +382,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     // Get current number of tuples
     int numTuples;
     memcpy(&numTuples, metaData, sizeof(int));
-    printf("numTuples before increment: %d\n", numTuples);
 
     // Calculate target page and slot
     int targetPage = 2 + (numTuples / slotsPerPage);
@@ -452,7 +397,7 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     memset(pageData, 0, PAGE_SIZE);
 
     // Ensure capacity
-    rc = ensureCapacity(targetPage + 1, &fh);
+    rc = ensureCapacity(targetPage, &fh);
     if (rc != RC_OK) {
         free(metaData);
         free(pageData);
@@ -485,8 +430,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     // Update number of tuples
     numTuples++;
     memcpy(metaData, &numTuples, sizeof(int));
-    printf("numTuples after increment: %d\n", numTuples);
-    printf("Writing to page %d, slot %d\n", targetPage, targetSlot);
 
     // Write updated metadata
     rc = writeBlock(1, &fh, metaData);
@@ -508,10 +451,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
 
     return RC_OK;
 }
-
-
-
-
 
 // Delete a record with the specified RID
 RC deleteRecord(RM_TableData *rel, RID id) {
