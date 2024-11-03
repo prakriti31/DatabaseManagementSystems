@@ -19,59 +19,6 @@ RC initRecordManager (void *mgmtData) {
 RC shutdownRecordManager (){return RC_OK;}
 
 
-// ---------------- DEBUGGING START ------------
-
-// RC createTable(char *name, Schema *schema) {
-//     // Step 1: Construct the file name for the table
-//     char local_fname[64] = {'\0'};
-//     strcat(local_fname, name);
-//     strcat(local_fname, ".bin");
-//
-//     // Step 2: Create the page file for the table
-//     RC rc = createPageFile(local_fname);
-//     if (rc != RC_OK) {
-//         return rc;  // Return error if page file creation fails
-//     }
-//
-//     // Step 3: Initialize buffer pool or page manager
-//     BM_BufferPool *buffer_pool = MAKE_POOL();
-//     rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
-//     if (rc != RC_OK) {
-//         return rc;  // Return error if buffer pool initialization fails
-//     }
-//
-//     // Step 4: Serialize the schema
-//     char *serializedSchema = serializeSchema(schema);
-//     if (serializedSchema == NULL) {
-//         shutdownBufferPool(buffer_pool);
-//         return -1;  // Handle serialization failure
-//     }
-//
-//     // Step 5: Write serialized schema to the first page of the file
-//     BM_PageHandle *page = MAKE_PAGE_HANDLE();
-//     rc = pinPage(buffer_pool, page, 0);  // First page reserved for schema
-//     if (rc != RC_OK) {
-//         free(serializedSchema);
-//         shutdownBufferPool(buffer_pool);
-//         return rc;  // Handle pinning error
-//     }
-//
-//     // Copy serialized schema data into the page's data field
-//     strncpy(page->data, serializedSchema, PAGE_SIZE);  // Assuming schema fits within one page
-//     markDirty(buffer_pool, page);  // Mark page as dirty to ensure it's written to disk
-//
-//     // Step 6: Unpin and cleanup
-//     unpinPage(buffer_pool, page);
-//     free(serializedSchema);  // Free the serialized schema after writing
-//     shutdownBufferPool(buffer_pool);  // Shutdown buffer pool after write
-//
-//     return RC_OK;  // Successfully created the table
-// }
-
-// ------------------- DEBUGGING END -----------------
-
-// ------------------- UPDATED CREATE-TABLE FN -------------------
-
 RC createTable(char *name, Schema *schema) {
     // Step 1: Construct the file name for the table
     char local_fname[64] = {'\0'};
@@ -144,9 +91,9 @@ RC createTable(char *name, Schema *schema) {
     char buffer[PAGE_SIZE];
     if (openPageFile(local_fname, &fh) == RC_OK) {
         if (readBlock(0, &fh, buffer) == RC_OK) {
-            printf("Contents of page 0 on disk: %s\n", buffer);
+            // printf("Contents of page 0 on disk: %s\n", buffer);
         } else {
-            printf("Failed to read page 0 from disk\n");
+            // printf("Failed to read page 0 from disk\n");
         }
         closePageFile(&fh);
     }
@@ -156,9 +103,9 @@ RC createTable(char *name, Schema *schema) {
 
     if (openPageFile(local_fname, &fh) == RC_OK) {
         if (readBlock(0, &fh, buffer) == RC_OK) {
-            printf("Contents of page 0 on disk (after createTable): %s\n", buffer);
+            // printf("Contents of page 0 on disk (after createTable): %s\n", buffer);
         } else {
-            printf("Failed to read page 0 from disk\n");
+            // printf("Failed to read page 0 from disk\n");
         }
         closePageFile(&fh);
     }
@@ -425,7 +372,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
         return RC_WRITE_FAILED;
     }
     memset(metaData, 0, PAGE_SIZE);
-
     rc = readBlock(1, &fh, metaData);
     if (rc != RC_OK) {
         free(metaData);
@@ -436,7 +382,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     // Get current number of tuples
     int numTuples;
     memcpy(&numTuples, metaData, sizeof(int));
-    printf("numTuples before increment: %d\n", numTuples);
 
     // Calculate target page and slot
     int targetPage = 2 + (numTuples / slotsPerPage);
@@ -452,7 +397,7 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     memset(pageData, 0, PAGE_SIZE);
 
     // Ensure capacity
-    rc = ensureCapacity(targetPage + 1, &fh);
+    rc = ensureCapacity(targetPage, &fh);
     if (rc != RC_OK) {
         free(metaData);
         free(pageData);
@@ -485,8 +430,6 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     // Update number of tuples
     numTuples++;
     memcpy(metaData, &numTuples, sizeof(int));
-    printf("numTuples after increment: %d\n", numTuples);
-    printf("Writing to page %d, slot %d\n", targetPage, targetSlot);
 
     // Write updated metadata
     rc = writeBlock(1, &fh, metaData);
@@ -509,68 +452,45 @@ RC insertRecord(RM_TableData *rel, Record *record) {
     return RC_OK;
 }
 
-
-
-
-
 // Delete a record with the specified RID
 RC deleteRecord(RM_TableData *rel, RID id) {
     SM_FileHandle fh;
     RC rc;
 
-    // Step 1: Open the table file
+    // Open the table file
     rc = openPageFile(rel->name, &fh);
     if (rc != RC_OK) return rc;
 
-    // Step 2: Read the page where the record resides
-    char *pageBuffer = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(id.page, &fh, pageBuffer);
+    // Calculate record size
+    int recordSize = getRecordSize(rel->schema);
+
+    // Read the page
+    char *pageData = (char *)malloc(PAGE_SIZE);
+    rc = readBlock(id.page, &fh, pageData);
     if (rc != RC_OK) {
-        free(pageBuffer);
+        free(pageData);
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 3: Calculate the slot size using the schema and get the position of the record in the page
-    int slotSize = getRecordSize(rel->schema);
-    char *recordSlot = pageBuffer + id.slot * slotSize;
+    // Mark the record as deleted
+    int offset = id.slot * recordSize;
+    char deletionMarker[] = "~!@#$";
+    memcpy(pageData + offset, deletionMarker, 5);
 
-    // Step 4: Mark the slot as free by zeroing out the slot (or you can set a specific flag if preferred)
-    memset(recordSlot, 0, slotSize);
-
-    // Step 5: Write the modified page back to the file
-    rc = writeBlock(id.page, &fh, pageBuffer);
-    free(pageBuffer); // Free the buffer
-
+    // Write the modified page back
+    rc = writeBlock(id.page, &fh, pageData);
+    free(pageData);
     if (rc != RC_OK) {
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 6: Update the tuple count in the metadata page
-    char *metaData = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(0, &fh, metaData);
-    if (rc != RC_OK) {
-        free(metaData);
-        closePageFile(&fh);
-        return rc;
-    }
-
-    int numTuples;
-    memcpy(&numTuples, metaData, sizeof(int));
-    numTuples--; // Decrease the tuple count
-    memcpy(metaData, &numTuples, sizeof(int)); // Update the count in metadata
-
-    rc = writeBlock(0, &fh, metaData);
-    free(metaData); // Free metadata buffer
-
-    // Step 7: Close the file
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // Close the file
+    closePageFile(&fh);
 
     return RC_OK;
 }
-
 // Update a record with new data
 RC updateRecord(RM_TableData *rel, Record *record) {
     SM_FileHandle fh;
@@ -643,6 +563,16 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
     // Calculate offset
     int offset = id.slot * recordSize;
 
+    // Check if the record is deleted
+    char isDeleted[6];  // 5 characters for "~!@#$" plus null terminator
+    memcpy(isDeleted, pageData + offset, 5);
+    isDeleted[5] = '\0';  // Ensure null-termination
+    if (strcmp(isDeleted, "~!@#$") == 0) {
+        free(pageData);
+        closePageFile(&fh);
+        return RC_RM_NO_MORE_TUPLES;  // Or a custom error code for deleted records
+    }
+
     // Allocate memory for record data if needed
     if (record->data == NULL) {
         record->data = (char *)malloc(recordSize);
@@ -665,28 +595,109 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
     return RC_OK;
 }
 
-
-
 // scans
+typedef struct ScanMgmt {
+    Expr *condition;
+    int currentPage;
+    int currentSlot;
+    bool scanStarted;
+} ScanMgmt;
 
-// Start a scan with a specific condition
 RC startScan(RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
+    // Initialize scan management data
+    ScanMgmt *mgmt = (ScanMgmt *)malloc(sizeof(ScanMgmt));
+    if (mgmt == NULL) {
+        return RC_WRITE_FAILED;
+    }
+
+    mgmt->condition = cond;
+    mgmt->currentPage = 1;  // Start from first data page (page 0 is schema, page 1 is metadata)
+    mgmt->currentSlot = -1; // Will be incremented to 0 in first next() call
+    mgmt->scanStarted = false;
+
     scan->rel = rel;
-    scan->mgmtData = cond; // Store condition for filtering
+    scan->mgmtData = mgmt;
+
     return RC_OK;
 }
 
-// Fetch the next record that satisfies the scan condition
 RC next(RM_ScanHandle *scan, Record *record) {
-    // Retrieve and filter records based on the scan condition
-    return RC_RM_NO_MORE_TUPLES;
-}
+    ScanMgmt *mgmt = (ScanMgmt *)scan->mgmtData;
+    if (mgmt == NULL) {
+        return -199;
+    }
 
-// Close an active scan
-RC closeScan(RM_ScanHandle *scan) {
-    free(scan->mgmtData); // Free any allocated memory for conditions
+    Schema *schema = scan->rel->schema;
+    int recordSize = getRecordSize(schema);
+    int slotsPerPage = (PAGE_SIZE - sizeof(int)) / recordSize;
+    bool foundRecord = false;
+
+    // Get total number of tuples
+    int totalTuples = getNumTuples(scan->rel);
+    if (totalTuples <= 0) {
+        return RC_RM_NO_MORE_TUPLES;
+    }
+
+    while (!foundRecord) {
+        // Move to next slot
+        mgmt->currentSlot++;
+
+        // If we've reached the end of the current page
+        if (mgmt->currentSlot >= slotsPerPage) {
+            mgmt->currentPage++;
+            mgmt->currentSlot = 0;
+        }
+
+        // Calculate if we've gone through all possible record positions
+        int currentPosition = ((mgmt->currentPage - 2) * slotsPerPage) + mgmt->currentSlot;
+        if (currentPosition >= totalTuples) {
+            return RC_RM_NO_MORE_TUPLES;
+        }
+
+        // Try to get the record at current position
+        RID rid = {mgmt->currentPage, mgmt->currentSlot};
+        RC rc = getRecord(scan->rel, rid, record);
+
+        // Skip if record doesn't exist or is deleted
+        if (rc != RC_OK) {
+            continue;
+        }
+
+        // If no condition, return record
+        if (mgmt->condition == NULL) {
+            foundRecord = true;
+            continue;
+        }
+
+        // Evaluate condition
+        Value *result = NULL;
+        rc = evalExpr(record, schema, mgmt->condition, &result);
+        if (rc != RC_OK) {
+            free(result);
+            continue;
+        }
+
+        // Check if condition is satisfied
+        if (result->v.boolV) {
+            foundRecord = true;
+        }
+
+        free(result);
+    }
+
     return RC_OK;
 }
+
+RC closeScan(RM_ScanHandle *scan) {
+    ScanMgmt *mgmt = (ScanMgmt *)scan->mgmtData;
+    if (mgmt != NULL) {
+        // Don't free the condition as it might be used elsewhere
+        free(mgmt);
+        scan->mgmtData = NULL;
+    }
+    return RC_OK;
+}
+
 
 // Creating schema for the table
 Schema *createSchema(int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
