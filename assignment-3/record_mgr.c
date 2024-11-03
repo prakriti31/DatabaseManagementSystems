@@ -457,59 +457,40 @@ RC deleteRecord(RM_TableData *rel, RID id) {
     SM_FileHandle fh;
     RC rc;
 
-    // Step 1: Open the table file
+    // Open the table file
     rc = openPageFile(rel->name, &fh);
     if (rc != RC_OK) return rc;
 
-    // Step 2: Read the page where the record resides
-    char *pageBuffer = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(id.page, &fh, pageBuffer);
+    // Calculate record size
+    int recordSize = getRecordSize(rel->schema);
+
+    // Read the page
+    char *pageData = (char *)malloc(PAGE_SIZE);
+    rc = readBlock(id.page, &fh, pageData);
     if (rc != RC_OK) {
-        free(pageBuffer);
+        free(pageData);
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 3: Calculate the slot size using the schema and get the position of the record in the page
-    int slotSize = getRecordSize(rel->schema);
-    char *recordSlot = pageBuffer + id.slot * slotSize;
+    // Mark the record as deleted
+    int offset = id.slot * recordSize;
+    char deletionMarker[] = "~!@#$";
+    memcpy(pageData + offset, deletionMarker, 5);
 
-    // Step 4: Mark the slot as free by zeroing out the slot (or you can set a specific flag if preferred)
-    memset(recordSlot, 0, slotSize);
-
-    // Step 5: Write the modified page back to the file
-    rc = writeBlock(id.page, &fh, pageBuffer);
-    free(pageBuffer); // Free the buffer
-
+    // Write the modified page back
+    rc = writeBlock(id.page, &fh, pageData);
+    free(pageData);
     if (rc != RC_OK) {
         closePageFile(&fh);
         return rc;
     }
 
-    // Step 6: Update the tuple count in the metadata page
-    char *metaData = (char *) malloc(PAGE_SIZE);
-    rc = readBlock(0, &fh, metaData);
-    if (rc != RC_OK) {
-        free(metaData);
-        closePageFile(&fh);
-        return rc;
-    }
-
-    int numTuples;
-    memcpy(&numTuples, metaData, sizeof(int));
-    numTuples--; // Decrease the tuple count
-    memcpy(metaData, &numTuples, sizeof(int)); // Update the count in metadata
-
-    rc = writeBlock(0, &fh, metaData);
-    free(metaData); // Free metadata buffer
-
-    // Step 7: Close the file
-    rc = closePageFile(&fh);
-    if (rc != RC_OK) return rc;
+    // Close the file
+    closePageFile(&fh);
 
     return RC_OK;
 }
-
 // Update a record with new data
 RC updateRecord(RM_TableData *rel, Record *record) {
     SM_FileHandle fh;
@@ -582,6 +563,16 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
     // Calculate offset
     int offset = id.slot * recordSize;
 
+    // Check if the record is deleted
+    char isDeleted[6];  // 5 characters for "~!@#$" plus null terminator
+    memcpy(isDeleted, pageData + offset, 5);
+    isDeleted[5] = '\0';  // Ensure null-termination
+    if (strcmp(isDeleted, "~!@#$") == 0) {
+        free(pageData);
+        closePageFile(&fh);
+        return RC_RM_NO_MORE_TUPLES;  // Or a custom error code for deleted records
+    }
+
     // Allocate memory for record data if needed
     if (record->data == NULL) {
         record->data = (char *)malloc(recordSize);
@@ -603,8 +594,6 @@ RC getRecord(RM_TableData *rel, RID id, Record *record) {
 
     return RC_OK;
 }
-
-
 
 // scans
 
