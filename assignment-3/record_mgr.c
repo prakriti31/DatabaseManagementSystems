@@ -20,25 +20,25 @@ RC shutdownRecordManager (){return RC_OK;}
 
 
 RC createTable(char *name, Schema *schema) {
-    // Step 1: Construct the file name for the table
+    // Construct the file name for the table
     char local_fname[64] = {'\0'};
     strcat(local_fname, name);
     // strcat(local_fname, ".bin");
 
-    // Step 2: Create the page file for the table
+    // Create the page file for the table
     RC rc = createPageFile(local_fname);
     if (rc != RC_OK) {
         return rc;  // Return error if page file creation fails
     }
 
-    // Step 3: Initialize buffer pool for managing pages
+    // Initialize buffer pool for managing pages
     BM_BufferPool *buffer_pool = MAKE_POOL();
     rc = initBufferPool(buffer_pool, local_fname, 4, RS_FIFO, NULL);  // 4 pages, FIFO replacement
     if (rc != RC_OK) {
         return rc;  // Return error if buffer pool initialization fails
     }
 
-    // Step 4: Serialize the schema
+    // Serialize the schema
     char *serializedSchema = serializeSchema(schema);
     // printf("Serialized schema: %s\n", serializedSchema);
     if (serializedSchema == NULL) {
@@ -46,7 +46,7 @@ RC createTable(char *name, Schema *schema) {
         return -1;  // Handle serialization failure
     }
 
-    // Step 5: Pin the first page, write serialized schema to it, and mark it as dirty
+    // Pin the first page, write serialized schema to it, and mark it as dirty
     BM_PageHandle *page = MAKE_PAGE_HANDLE();
     rc = pinPage(buffer_pool, page, 0);  // First page reserved for schema
     if (rc != RC_OK) {
@@ -112,9 +112,6 @@ RC createTable(char *name, Schema *schema) {
 
     return RC_OK;  // Successfully created the table
 }
-
-
-// ------------------- UPDATED CREATE-TABLE FN -------------------
 
 
 Schema *deserializeSchema(char *data) {
@@ -818,6 +815,7 @@ RC getAttr(Record *record, Schema *schema, int attrNum, Value **value) {
     return RC_OK;
 }
 
+
 RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
     if (!record || !record->data || !schema || !value || attrNum < 0 || attrNum >= schema->numAttr)
         return RC_WRITE_FAILED;
@@ -828,21 +826,21 @@ RC setAttr(Record *record, Schema *schema, int attrNum, Value *value) {
     switch (schema->dataTypes[attrNum]) {
         case DT_INT:
             if (value->dt != DT_INT) return RC_WRITE_FAILED;
-            memcpy(attrData, &value->v.intV, sizeof(int));
-            break;
+        memcpy(attrData, &value->v.intV, sizeof(int));
+        break;
         case DT_STRING:
             if (value->dt != DT_STRING) return RC_WRITE_FAILED;
-            memset(attrData, 0, schema->typeLength[attrNum]); // Clear existing data
-            strncpy(attrData, value->v.stringV, schema->typeLength[attrNum]);
-            break;
+        memset(attrData, 0, schema->typeLength[attrNum]); // Clear existing data
+        strncpy(attrData, value->v.stringV, schema->typeLength[attrNum]);
+        break;
         case DT_FLOAT:
             if (value->dt != DT_FLOAT) return RC_WRITE_FAILED;
-            memcpy(attrData, &value->v.floatV, sizeof(float));
-            break;
+        memcpy(attrData, &value->v.floatV, sizeof(float));
+        break;
         case DT_BOOL:
             if (value->dt != DT_BOOL) return RC_WRITE_FAILED;
-            memcpy(attrData, &value->v.boolV, sizeof(bool));
-            break;
+        memcpy(attrData, &value->v.boolV, sizeof(bool));
+        break;
         default:
             return RC_WRITE_FAILED;
     }

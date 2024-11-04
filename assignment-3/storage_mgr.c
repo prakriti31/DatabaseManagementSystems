@@ -11,7 +11,7 @@
  */
 
 void initStorageManager(void) {
-    printf("Storage manager init.\n");
+    // printf("Storage manager init.\n");
 }
 // Kamakshya Nanda
 RC createPageFile(char *fileName) {
