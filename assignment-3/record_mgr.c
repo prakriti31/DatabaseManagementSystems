@@ -171,7 +171,7 @@ Schema *deserializeSchema(char *data) {
         } else if (strncmp(pos, "FLOAT", 5) == 0) {
             schema->dataTypes[i] = DT_FLOAT;
             schema->typeLength[i] = 0;
-            pos += 5;  // Move past "FLOAT"
+            pos += 5;  // Move past "FLOAT"z
         } else if (strncmp(pos, "BOOL", 4) == 0) {
             schema->dataTypes[i] = DT_BOOL;
             schema->typeLength[i] = 0;
