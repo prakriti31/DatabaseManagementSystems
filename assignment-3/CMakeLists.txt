@@ -42,8 +42,6 @@ add_executable(cli
         storage_mgr.c
         storage_mgr.h
         tables.h
-#        test_assign3_1.c
-        test_helper.h
         record_mgr.c
         storage_mgr.c
         buffer_mgr.c

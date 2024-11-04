@@ -213,7 +213,7 @@ void view_records(RM_TableData *rel) {
 
         // Display the record's page, slot, ID, Name, and Age if valid
         if (strlen(nameVal->v.stringV) > 0) {
-            printf("%d\t\t%d\t\t%d\t%s\t%d\n",
+            printf("%d\t%d\t%d\t%s\t%d\n",
                    record->id.page,
                    record->id.slot,
                    idVal->v.intV,
