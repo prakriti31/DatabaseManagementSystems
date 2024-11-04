@@ -30,8 +30,8 @@ Ensure you have the following installed:
 
 1. Clone the repository:
    ```bash
-   git clone https://bitbucket.org/fall_24/fall_2024_32/src/master/
-   cd assignment-3
+      git clone https://bitbucket.org/fall_24/fall_2024_32/src/master/
+      cd assignment-3
    ```
 2. Use CMake to configure and build the project:
    ```bash
@@ -45,7 +45,10 @@ Ensure you have the following installed:
    ```bash
    ./test_assign3_1
    ```
-
+4. Running CLI
+   ```bash
+      ./cli
+   ```
 This command will execute the tests and output results, verifying core functionalities such as table creation, record operations, and scans.
 
 ### Overview of Key Functions & Member Contributions
@@ -83,3 +86,33 @@ This command will execute the tests and output results, verifying core functiona
    - `createRecord`: Allocates memory for a new record.
    - `getAttr`: Retrieves an attribute value from a record.
    - `setAttr`: Sets an attribute value in a record.
+
+## Command Line Interface (CLI)
+The CLI application provides an interactive way to use the Record Manager, allowing users to create, manage, and interact with tables and records. Below is a list of available options in the CLI and their functionalities.
+
+### CLI Options:
+1. `Create Table`
+   - Prompts the user to enter a name for the new table.
+   - Creates a table with a predefined schema (`ID`, `Name`, `Age`), where `ID` is auto-generated as a primary key.
+2. `Open Table`
+   - Allows the user to open an existing table by entering its name.
+   - This step is necessary before performing any operations on the table.
+3. I`nsert Record`
+   - Prompts the user to enter values for `Name` and `Age`.
+   - Automatically assigns a unique `ID` for each record.
+   - Inserts the new record into the currently open table.
+4. `Delete Record`
+   - Prompts the user to enter the `ID` of the record they wish to delete.
+   - Searches for the record with the given `page` and `slot`,then deletes it if found.
+5. `Update Record`
+   - Prompts the user to enter the `ID` of the record they wish to update.
+   - If the record is found, the user is prompted to enter new values for `Name` and `Age`.
+   - Updates the specified record with the new values.
+6. `View Records`
+   - Displays all records in the currently open table.
+   - Shows each record’s `Page`, `Slot`, `ID`, `Name`, and `Age` for easy reference.
+7. `Close Table`
+   - Closes the currently open table and saves any changes.
+   - This action must be performed before opening another table.
+8. `Exit`
+   - Exits the CLI application and shuts down the Record Manager, releasing any resources in use.
