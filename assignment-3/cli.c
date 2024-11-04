@@ -142,120 +142,56 @@ void insert_record(RM_TableData *rel) {
 
 
 void delete_record(RM_TableData *rel) {
-    int targetID;
-    printf("Enter ID of the record to delete: ");
-    scanf("%d", &targetID);
+    int page, slot;
+    printf("Enter Page Number: ");
+    scanf("%d", &page);
+    printf("Enter Slot Number: ");
+    scanf("%d", &slot);
+    RID rid = {page, slot};
 
-    RM_ScanHandle scan;
-    Expr *condition = NULL;
-    startScan(rel, &scan, condition);
-
-    Record *record;
-    createRecord(&record, rel->schema);
-    Value *idVal;
-    bool found = false;
-
-    // Scan through records to find the matching ID
-    while (next(&scan, record) != RC_RM_NO_MORE_TUPLES) {
-        getAttr(record, rel->schema, 0, &idVal);
-
-        // Check if this record's ID matches the target ID
-        if (idVal->v.intV == targetID) {
-            RC result = deleteRecord(rel, record->id);
-            if (result == RC_OK) {
-                printf("Record with ID %d deleted successfully.\n", targetID);
-            } else {
-                printf("Failed to delete record with ID %d. Error code: %d\n", targetID, result);
-            }
-            found = true;
-            freeVal(idVal);
-            break;
-        }
-
-        freeVal(idVal);
+    RC result = deleteRecord(rel, rid);
+    if (result == RC_OK) {
+        printf("Record deleted successfully.\n");
+    } else {
+        printf("Failed to delete record. Error code: %d\n", result);
     }
-
-    if (!found) {
-        printf("Record with ID %d not found.\n", targetID);
-    }
-
-    closeScan(&scan);
-    freeRecord(record);
 }
-
 
 void update_record(RM_TableData *rel) {
-    int targetID;
-    printf("Enter ID of the record to update: ");
-    scanf("%d", &targetID);
-
-    RM_ScanHandle scan;
-    Expr *condition = NULL;
-    startScan(rel, &scan, condition);
+    int page, slot;
+    printf(" -- Updates selected record with data {Id: 1, Name: Alex, Age: 35}\n");
+    printf(" -- To view record page and slot, go back and chose option '6'\n");
+    printf("Enter Page Number of the record to update: ");
+    scanf("%d", &page);
+    printf("Enter Slot Number: ");
+    scanf("%d", &slot);
+    RID rid = {page, slot};
 
     Record *record;
     createRecord(&record, rel->schema);
+    record->id = rid;
+
     Value *idVal, *nameVal, *ageVal;
-    bool found = false;
+    MAKE_VALUE(idVal, DT_INT, 1);
+    MAKE_STRING_VALUE(nameVal, "Alex");
+    MAKE_VALUE(ageVal, DT_INT, 35);
 
-    // Scan through records to find the matching ID
-    while (next(&scan, record) != RC_RM_NO_MORE_TUPLES) {
-        getAttr(record, rel->schema, 0, &idVal);
+    setAttr(record, rel->schema, 0, idVal);
+    setAttr(record, rel->schema, 1, nameVal);
+    setAttr(record, rel->schema, 2, ageVal);
 
-        // Check if this record's ID matches the target ID
-        if (idVal->v.intV == targetID) {
-            // Record found, retrieve current values
-            getAttr(record, rel->schema, 1, &nameVal);
-            getAttr(record, rel->schema, 2, &ageVal);
-
-            printf("Current Name: %s\n", nameVal->v.stringV);
-            printf("Current Age: %d\n", ageVal->v.intV);
-
-            // Prompt user for new values
-            char newName[20];
-            int newAge;
-            printf("Enter new Name (string, max 20 characters): ");
-            scanf("%s", newName);
-            printf("Enter new Age (integer): ");
-            scanf("%d", &newAge);
-
-            // Update Name and Age
-            Value *newNameVal, *newAgeVal;
-            MAKE_STRING_VALUE(newNameVal, newName);
-            MAKE_VALUE(newAgeVal, DT_INT, newAge);
-
-            setAttr(record, rel->schema, 1, newNameVal); // Update Name
-            setAttr(record, rel->schema, 2, newAgeVal); // Update Age
-
-            // Commit the updated record back to the table
-            RC result = updateRecord(rel, record);
-            if (result == RC_OK) {
-                printf("Record with ID %d updated successfully.\n", targetID);
-            } else {
-                printf("Failed to update record with ID %d. Error code: %d\n", targetID, result);
-            }
-            found = true;
-
-            // Free allocated values
-            freeVal(newNameVal);
-            freeVal(newAgeVal);
-            freeVal(nameVal);
-            freeVal(ageVal);
-            freeVal(idVal);
-            break;
-        }
-
-        freeVal(idVal);
+    RC result = updateRecord(rel, record);
+    if (result == RC_OK) {
+        printf("Record updated successfully.\n");
+    } else {
+        printf("Failed to update record. Error code: %d\n", result);
     }
 
-    if (!found) {
-        printf("Record with ID %d not found.\n", targetID);
-    }
-
-    closeScan(&scan);
+    freeVal(idVal);
+    freeVal(nameVal);
+    freeVal(ageVal);
     freeRecord(record);
 }
-
 
 void view_records(RM_TableData *rel) {
     RM_ScanHandle scan;
@@ -267,7 +203,7 @@ void view_records(RM_TableData *rel) {
     Value *idVal, *nameVal, *ageVal;
 
     printf("Current records in table:\n");
-    printf("ID\tName\tAge\n");
+    printf("Page\tSlot\tID\tName\t\tAge\n");
 
     while (next(&scan, record) != RC_RM_NO_MORE_TUPLES) {
         // Retrieve each attribute to validate and display the record
@@ -277,7 +213,9 @@ void view_records(RM_TableData *rel) {
 
         // Display the record's page, slot, ID, Name, and Age if valid
         if (strlen(nameVal->v.stringV) > 0) {
-            printf("%d\t%s\t%d\n",
+            printf("%d\t\t%d\t\t%d\t%s\t%d\n",
+                   record->id.page,
+                   record->id.slot,
                    idVal->v.intV,
                    nameVal->v.stringV,
                    ageVal->v.intV);
