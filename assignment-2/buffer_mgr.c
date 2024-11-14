@@ -34,7 +34,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName,
     mgmt->timestamps = (int *)calloc(numPages, sizeof(int));
     mgmt->currentTimestamp = 0;
     SM_FileHandle fileHandle;
-    RC rc = openPageFile(pageFileName, &fileHandle);
+    RC rc = openPageFile((char *)pageFileName, &fileHandle);
     if (rc != RC_OK) {
         return rc;
     }
