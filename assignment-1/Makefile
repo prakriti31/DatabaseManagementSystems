@@ -1,11 +1,11 @@
 CC = gcc
-CFLAGS = -g -Wall -std=c11
+CFLAGS = -g -Wall -std=c17
 INCLUDES = -I.
 
 # Source files
-SOURCES = storage_mgr.c buffer_mgr.c buffer_mgr_stat.c test_assign2_1.c dberror.c
+SOURCES = storage_mgr.c dberror.c test_assign1_1.c
 OBJECTS = $(SOURCES:.c=.o)
-TARGET = assignment_2
+TARGET = assignment_1
 
 # Default target
 all: $(TARGET)
@@ -26,15 +26,13 @@ clean:
 test: $(TARGET)
 	./$(TARGET)
 
-# Debug target with address sanitizer
-debug: CFLAGS += -fsanitize=address -DDEBUG
+# Debug target
+debug: CFLAGS += -DDEBUG
 debug: clean all
 
 # Dependencies
 storage_mgr.o: storage_mgr.c storage_mgr.h dberror.h
-buffer_mgr.o: buffer_mgr.c buffer_mgr.h buffer_mgr_stat.h storage_mgr.h dberror.h
-buffer_mgr_stat.o: buffer_mgr_stat.c buffer_mgr_stat.h buffer_mgr.h
 dberror.o: dberror.c dberror.h
-test_assign2_1.o: test_assign2_1.c test_helper.h storage_mgr.h buffer_mgr.h dberror.h
+test_assign1_1.o: test_assign1_1.c test_helper.h storage_mgr.h dberror.h
 
 .PHONY: all clean test debug

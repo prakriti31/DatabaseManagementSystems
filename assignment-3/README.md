@@ -33,17 +33,14 @@ Ensure you have the following installed:
       git clone https://bitbucket.org/fall_24/fall_2024_32/src/master/
       cd assignment-3
    ```
-2. Use CMake to configure and build the project:
+2. Build Binaries:
    ```bash
-       mkdir build
-       cd build
-       cmake ..
        make
    ```
 3. Running Tests
    After building, you can run the test cases to verify the functionality of the Record Manager.
    ```bash
-   ./test_assign3_1
+   ./assignment_3
    ```
 4. Running CLI
    ```bash
