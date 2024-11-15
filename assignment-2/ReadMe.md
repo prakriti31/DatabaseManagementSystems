@@ -12,9 +12,16 @@ This project implements a buffer manager for a database system. The buffer manag
 - `dt.h`: Defines data types used in the project.
 
 ## Running Tests
-After compilation, run the tests using:
+After compilation, build the binary using:
 
-./test_assign2_1
+```bash
+  make
+```
+
+Then run the binary using:
+```bash
+  ./assignment_2
+```
 
 ## Functionality
 The buffer manager implements the following key features:
