@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.29)
-project(assign3_record_manager C)
+project(assignment_3 C)
 
 set(CMAKE_C_STANDARD 11)
 
 include_directories(.)
 
-add_executable(assign3_record_manager
+add_executable(assignment_3
         buffer_mgr.c
         buffer_mgr.h
         buffer_mgr_stat.c
