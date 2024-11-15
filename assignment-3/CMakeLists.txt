@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28.3)
+cmake_minimum_required(VERSION 3.29)
 project(assign3_record_manager C)
 
 set(CMAKE_C_STANDARD 11)
