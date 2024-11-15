@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_2_1.dir/storage_mgr.c.o CMakeFiles/test_2_1.dir/buffer_mgr.c.o CMakeFiles/test_2_1.dir/buffer_mgr_stat.c.o CMakeFiles/test_2_1.dir/test_assign2_1.c.o CMakeFiles/test_2_1.dir/dberror.c.o -o test_2_1 

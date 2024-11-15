@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/cli.dir/buffer_mgr.c.o CMakeFiles/cli.dir/buffer_mgr_stat.c.o CMakeFiles/cli.dir/dberror.c.o CMakeFiles/cli.dir/expr.c.o CMakeFiles/cli.dir/rm_serializer.c.o CMakeFiles/cli.dir/storage_mgr.c.o CMakeFiles/cli.dir/record_mgr.c.o CMakeFiles/cli.dir/cli.c.o -o cli 

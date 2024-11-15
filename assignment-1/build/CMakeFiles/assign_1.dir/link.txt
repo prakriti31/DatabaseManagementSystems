@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/assign_1.dir/storage_mgr.c.o CMakeFiles/assign_1.dir/dberror.c.o CMakeFiles/assign_1.dir/test_assign1_1.c.o -o assign_1 

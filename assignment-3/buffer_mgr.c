@@ -34,7 +34,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName,
     mgmt->timestamps = (int *)calloc(numPages, sizeof(int));
     mgmt->currentTimestamp = 0;
     SM_FileHandle fileHandle;
-    RC rc = openPageFile(pageFileName, &fileHandle);
+    RC rc = openPageFile((char *)pageFileName, &fileHandle);
     if (rc != RC_OK) {
         return rc;
     }
@@ -153,11 +153,9 @@ static void updateLRUOrder(BM_BufferPool *const bm, int frameIndex) {
 
 RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
     BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
-
     // Check if the page is already in the buffer pool
     for (int i = 0; i < bm->numPages; i++) {
         if (mgmt->frames[i].pageNum == pageNum) {
-            // Page is in the buffer pool
             page->pageNum = pageNum;
             page->data = mgmt->frames[i].data;
             mgmt->fixCounts[i]++;
@@ -168,35 +166,33 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
         }
     }
 
-    // If the page is not in the buffer pool, find a frame to replace
+    // If the page is not in the buffer pool, we need to load it
     int frameIndex = findFrameToReplace(bm);
     if (frameIndex == NO_PAGE)
         return -1;
-
     // If the chosen frame is dirty, write it back to disk
     if (mgmt->dirtyFlags[frameIndex]) {
         forcePage(bm, &mgmt->frames[frameIndex]);
     }
 
-    // Allocate space and load the page data from disk if it’s not already loaded
-    if (mgmt->frames[frameIndex].data == NULL) {
-        mgmt->frames[frameIndex].data = malloc(PAGE_SIZE);
-        if (mgmt->frames[frameIndex].data == NULL) return -99;
+    // Load the new page from disk
+    if (mgmt->frames[frameIndex].data != NULL) {
+        free(mgmt->frames[frameIndex].data);
     }
-
-    // Load the page data from disk into the buffer
+    mgmt->frames[frameIndex].data = malloc(PAGE_SIZE);
     RC rc = readBlock(pageNum, &(mgmt->fileHandle), mgmt->frames[frameIndex].data);
-
     if (rc != RC_OK) {
         if (rc == RC_READ_NON_EXISTING_PAGE) {
-            // Initialize the page with empty data if it does not exist on disk
+            // Initialize new page
             memset(mgmt->frames[frameIndex].data, 0, PAGE_SIZE);
+            char pageContent[PAGE_SIZE];
+            snprintf(pageContent, PAGE_SIZE, "Page-%i", pageNum);
+            strncpy(mgmt->frames[frameIndex].data, pageContent, strlen(pageContent));
         } else {
             return rc;
         }
     }
 
-    // Update buffer pool metadata
     mgmt->frames[frameIndex].pageNum = pageNum;
     mgmt->fixCounts[frameIndex] = 1;
     mgmt->dirtyFlags[frameIndex] = false;
@@ -205,13 +201,10 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
         updateLRUOrder(bm, frameIndex);
     }
 
-    // Set the output page handle to refer to this frame's data
     page->pageNum = pageNum;
     page->data = mgmt->frames[frameIndex].data;
-
     return RC_OK;
 }
-
 
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
     BM_MgmtData *mgmt = (BM_MgmtData *)bm->mgmtData;
