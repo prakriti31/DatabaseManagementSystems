@@ -1,4 +1,5 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/cli.dir/link.d"
   "CMakeFiles/cli.dir/buffer_mgr.c.o"
   "CMakeFiles/cli.dir/buffer_mgr.c.o.d"
   "CMakeFiles/cli.dir/buffer_mgr_stat.c.o"

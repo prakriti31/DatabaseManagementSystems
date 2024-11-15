@@ -1,4 +1,5 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/assign3_record_manager.dir/link.d"
   "CMakeFiles/assign3_record_manager.dir/buffer_mgr.c.o"
   "CMakeFiles/assign3_record_manager.dir/buffer_mgr.c.o.d"
   "CMakeFiles/assign3_record_manager.dir/buffer_mgr_stat.c.o"

@@ -16,6 +16,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-3/record_mgr.c" "CMakeFiles/cli.dir/record_mgr.c.o" "gcc" "CMakeFiles/cli.dir/record_mgr.c.o.d"
   "/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-3/rm_serializer.c" "CMakeFiles/cli.dir/rm_serializer.c.o" "gcc" "CMakeFiles/cli.dir/rm_serializer.c.o.d"
   "/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-3/storage_mgr.c" "CMakeFiles/cli.dir/storage_mgr.c.o" "gcc" "CMakeFiles/cli.dir/storage_mgr.c.o.d"
+  "" "cli" "gcc" "CMakeFiles/cli.dir/link.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

@@ -23,8 +23,6 @@ add_executable(assign3_record_manager
         test_assign3_1.c
         test_helper.h
         record_mgr.c
-        storage_mgr.c
-        buffer_mgr.c
 )
 
 add_executable(cli
@@ -43,7 +41,5 @@ add_executable(cli
         storage_mgr.h
         tables.h
         record_mgr.c
-        storage_mgr.c
-        buffer_mgr.c
         cli.c
 )

@@ -1,3 +1,0 @@
-/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-1/build/CMakeFiles/assign_1.dir
-/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-1/build/CMakeFiles/edit_cache.dir
-/home/yash/Desktop/IIT/ADO/fall_2024_32/assignment-1/build/CMakeFiles/rebuild_cache.dir
