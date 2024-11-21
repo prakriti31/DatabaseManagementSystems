@@ -39,6 +39,9 @@ typedef int RC;
 #define RC_IM_N_TO_LAGE 302
 #define RC_IM_NO_MORE_ENTRIES 303
 
+#define RC_IM_SCAN_NOT_OPEN 601
+#define RC_IM_TREE_NOT_INITIALIZED 602
+
 /* holder for error messages */
 extern char *RC_message;
 
