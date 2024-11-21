@@ -52,7 +52,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
             if (mgmt->dirtyFlags[i] == true) {
                 // Force the page to write back if it is dirty
                 if (mgmt->fixCounts[i] > 0) {
-                    return RC_PINNED_PAGES; // Cannot shutdown if there are pinned pages
+                    return -2; // Cannot shutdown if there are pinned pages
                 }
                 forcePage(bm, &mgmt->frames[i]);
             }
@@ -99,7 +99,7 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
             return RC_OK;
         }
     }
-    return RC_PAGE_NOT_FOUND;
+    return -1;
 }
 
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
@@ -211,7 +211,7 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
     for (int i = 0; i < bm->numPages; i++) {
         if (mgmt->frames[i].pageNum == page->pageNum) {
             if (mgmt->fixCounts[i] == 0)
-                return RC_PAGE_NOT_PINNED;
+                return -3;
             mgmt->fixCounts[i]--;
             if (bm->strategy == RS_LRU) {
                 updateLRUOrder(bm, i);
@@ -219,7 +219,7 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
             return RC_OK;
         }
     }
-    return RC_PAGE_NOT_FOUND;
+    return -1;
 }
 
 PageNumber *getFrameContents(BM_BufferPool *const bm) {
