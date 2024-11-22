@@ -592,8 +592,80 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
     return RC_IM_KEY_NOT_FOUND;
 }
 
+void splitNode(BTreeHandle *tree, BTreeNode *current) {
+    BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
+
+    // Create a new node for the split
+    BTreeNode *newNode = createNode(btree->order, current->isLeaf);
+    int midIndex = current->numKeys / 2;
+
+    // Promote middle key
+    Value *midKey = current->keys[midIndex];
+
+    // Move second half of keys and pointers to newNode
+    newNode->numKeys = current->numKeys - midIndex - 1;
+    for (int j = 0; j < newNode->numKeys; j++) {
+        newNode->keys[j] = current->keys[midIndex + 1 + j];
+        newNode->pointers[j] = current->pointers[midIndex + 1 + j];
+    }
+    if (!current->isLeaf) {
+        newNode->pointers[newNode->numKeys] = current->pointers[current->numKeys];
+    }
+
+    // Update current node's key count
+    current->numKeys = midIndex;
+
+    // Maintain next pointer for leaf nodes
+    if (current->isLeaf) {
+        newNode->pointers[newNode->numKeys] = current->pointers[current->numKeys];
+        current->pointers[current->numKeys] = newNode;
+    }
+
+    // Handle parent updates
+    if (current == btree->root) {
+        // Create a new root
+        BTreeNode *newRoot = createNode(btree->order, false);
+        newRoot->keys[0] = midKey;
+        newRoot->pointers[0] = current;
+        newRoot->pointers[1] = newNode;
+        newRoot->numKeys = 1;
+
+        // Update tree root
+        btree->root = newRoot;
+        current->parent = newRoot;
+        newNode->parent = newRoot;
+        btree->numNodes++;
+    } else {
+        // Insert middle key into parent
+        BTreeNode *parent = current->parent;
+        int i = 0;
+        while (i < parent->numKeys && parent->keys[i]->v.intV < midKey->v.intV) {
+            i++;
+        }
+
+        // Shift parent keys and pointers to make room for midKey
+        for (int j = parent->numKeys; j > i; j--) {
+            parent->keys[j] = parent->keys[j - 1];
+            parent->pointers[j + 1] = parent->pointers[j];
+        }
+        parent->keys[i] = midKey;
+        parent->pointers[i + 1] = newNode;
+        parent->numKeys++;
+        newNode->parent = parent;
+
+        // Recursively handle splits if the parent is full
+        if (parent->numKeys == btree->order) {
+            splitNode(tree, parent);
+        }
+    }
+
+    btree->numNodes++; // Increment node count for the newly created node
+}
+
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
+    printf("--------------------------\n"); // Debugging output
+
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
 
     // If the tree is empty, initialize the root
@@ -607,11 +679,12 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         btree->numNodes++;  // Increment node count for root
         btree->numEntries++;
 
-        // Print tree after root creation
+        // Print tree and number of nodes
         printf("After creating root node:\n");
         char *treeStr = printTree(tree);
         printf("%s", treeStr);
         free(treeStr);
+        printf("Number of nodes: %d\n", btree->numNodes);
 
         return RC_OK;
     }
@@ -642,7 +715,6 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current->keys[j] = current->keys[j - 1];
         current->pointers[j + 1] = current->pointers[j];
     }
-
     current->keys[i] = (Value *)malloc(sizeof(Value));
     memcpy(current->keys[i], key, sizeof(Value));
     current->pointers[i] = malloc(sizeof(RID));
@@ -650,90 +722,27 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     current->numKeys++;
     btree->numEntries++;
 
-    // Print tree after key insertion (before split, if any)
+    // Print tree and number of nodes before splitting
     printf("After inserting key %d:\n", key->v.intV);
     char *treeStr = printTree(tree);
     printf("%s", treeStr);
     free(treeStr);
+    printf("Number of nodes: %d\n", btree->numNodes);
 
     // If the node is full, split it
     if (current->numKeys == btree->order+1) {
-        BTreeNode *newNode = createNode(btree->order, current->isLeaf);
-        int midIndex = current->numKeys / 2;
+        splitNode(tree, current);
 
-        if (btree->order % 2 == 0) {
-            midIndex--;  // Move midIndex for even order
-        }
-
-        Value *midKey = current->keys[midIndex];
-
-        // Move second half of keys and pointers to the new node
-        newNode->numKeys = current->numKeys - midIndex - 1;
-        for (int j = 0; j < newNode->numKeys; j++) {
-            newNode->keys[j] = current->keys[midIndex + 1 + j];
-            newNode->pointers[j] = current->pointers[midIndex + 1 + j];
-        }
-        current->numKeys = midIndex;
-
-        // Print tree after node split
+        // Print tree and number of nodes after splitting
         printf("After splitting node:\n");
         treeStr = printTree(tree);
         printf("%s", treeStr);
         free(treeStr);
-
-        // If the node is the root, create a new root
-        if (current->parent == NULL) {
-            BTreeNode *newRoot = createNode(btree->order, false);
-            newRoot->keys[0] = midKey;
-            newRoot->pointers[0] = current;
-            newRoot->pointers[1] = newNode;
-            newRoot->numKeys = 1;
-            btree->root = newRoot;
-            current->parent = newRoot;
-            newNode->parent = newRoot;
-            btree->numNodes++;  // Increment node count for new root
-
-            // Print tree after creating a new root
-            printf("After creating new root:\n");
-            treeStr = printTree(tree);
-            printf("%s", treeStr);
-            free(treeStr);
-
-        } else {
-            // Insert middle key into the parent node
-            int i = 0;
-            while (i < current->parent->numKeys && current->parent->keys[i]->v.intV < midKey->v.intV) {
-                i++;
-            }
-
-            // Shift parent keys and pointers to make room
-            for (int j = current->parent->numKeys; j > i; j--) {
-                current->parent->keys[j] = current->parent->keys[j - 1];
-                current->parent->pointers[j + 1] = current->parent->pointers[j];
-            }
-
-            current->parent->keys[i] = midKey;
-            current->parent->pointers[i + 1] = newNode;
-            current->parent->numKeys++;
-            newNode->parent = current->parent;
-            btree->numNodes++;  // Increment node count for new node
-
-            // Print tree after updating parent
-            printf("After inserting middle key into parent:\n");
-            treeStr = printTree(tree);
-            printf("%s", treeStr);
-            free(treeStr);
-
-            // If the parent node is full, split recursively
-            if (current->parent->numKeys == btree->order) {
-                return insertKey(tree, midKey, rid); // Recursively handle split
-            }
-        }
+        printf("Number of nodes: %d\n", btree->numNodes);
     }
 
     return RC_OK;
 }
-
 RC deleteKey(BTreeHandle *tree, Value *key) {
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
 
