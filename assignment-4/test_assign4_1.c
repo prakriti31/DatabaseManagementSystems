@@ -149,7 +149,7 @@ testDelete (void)
       // insert keys
       for(i = 0; i < numInserts; i++)
 	TEST_CHECK(insertKey(tree, keys[i], insert[i]));
-      
+
       // delete entries
       for(i = 0; i < numInserts; i++)
 	{

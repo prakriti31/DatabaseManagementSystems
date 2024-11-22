@@ -41,6 +41,7 @@ typedef int RC;
 
 #define RC_IM_SCAN_NOT_OPEN 601
 #define RC_IM_TREE_NOT_INITIALIZED 602
+#define RC_READ_FAILED 603
 
 /* holder for error messages */
 extern char *RC_message;

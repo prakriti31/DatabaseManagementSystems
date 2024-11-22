@@ -52,48 +52,109 @@ static void freeNode(BTreeNode *node) {
     }
 }
 
-// Initialize and shutdown the B+ Tree index manager
+// Initialize the B+ Tree index manager
 RC initIndexManager(void *mgmtData) {
+    // Initialize any global resources if necessary
+    if (mgmtData != NULL) {
+        BTreeMgmtData *btreeMgmtData = (BTreeMgmtData *)mgmtData;
+        btreeMgmtData->numNodes = 0;
+        btreeMgmtData->numEntries = 0;
+        btreeMgmtData->order = 0;
+        btreeMgmtData->root = NULL;
+    }
     return RC_OK;
 }
 
-RC shutdownIndexManager() {
+// Shutdown the B+ Tree index manager
+RC shutdownIndexManager(void *mgmtData) {
+    // Free any allocated resources associated with the manager
+    if (mgmtData != NULL) {
+        BTreeMgmtData *btreeMgmtData = (BTreeMgmtData *)mgmtData;
+        if (btreeMgmtData->root != NULL) {
+            freeNode(btreeMgmtData->root);  // Free the root node
+        }
+        free(btreeMgmtData);  // Free the management data structure
+    }
     return RC_OK;
 }
 
-// Create a B+ Tree index
 RC createBtree(char *idxId, DataType keyType, int n) {
     SM_FileHandle fh;
+
+    // Step 1: Create the page file if it doesn't exist
     if (createPageFile(idxId) != RC_OK) {
         return RC_FILE_NOT_FOUND;
     }
+
+    // Step 2: Open the page file for reading and writing
     if (openPageFile(idxId, &fh) != RC_OK) {
         return RC_FILE_NOT_FOUND;
     }
+
+    // Step 3: Initialize the B-tree management data (metadata)
     BTreeMgmtData *btree = (BTreeMgmtData *)malloc(sizeof(BTreeMgmtData));
     btree->order = n;
-    btree->numNodes = 1;  // Initial number of nodes is 1 (root node)
-    btree->numEntries = 0;
-    btree->root = createNode(n, true);
+    btree->numNodes = 1;  // Initial number of nodes (just the root)
+    btree->numEntries = 0;  // Initially, no entries
+    btree->root = createNode(n, true);  // Create the root node (leaf node)
+
+    // Step 4: Write the B-tree metadata to the file (typically on the first page)
+    BM_PageHandle page;
+    page.data = (char *)malloc(PAGE_SIZE);
+    if (readBlock(0, &fh, page.data) != RC_OK) {
+        free(page.data);
+        closePageFile(&fh);
+        return RC_FILE_NOT_FOUND;
+    }
+
+    int offset = 0;
+    memcpy(&btree->order, page.data + offset, sizeof(int));
+    offset += sizeof(int);
+    memcpy(&btree->numNodes, page.data + offset, sizeof(int));
+    offset += sizeof(int);
+    memcpy(&btree->numEntries, page.data + offset, sizeof(int));
+    offset += sizeof(int);
+    memcpy(page.data + offset, &btree->root, sizeof(BTreeNode *));  // Write the root node pointer (adjust if needed)
+
+    // Write the updated page back to the file
+    if (writeBlock(0, &fh, &page) != RC_OK) {
+        closePageFile(&fh);
+        return RC_FILE_NOT_FOUND;
+    }
+
+    // Step 5: Clean up and close the file
     closePageFile(&fh);
-    // Do not free the root node here anymore
-    free(btree);  // We are done with initialization
     return RC_OK;
 }
 
-// Open a B+ Tree index
+
 RC openBtree(BTreeHandle **tree, char *idxId) {
     *tree = (BTreeHandle *)malloc(sizeof(BTreeHandle));
     (*tree)->idxId = strdup(idxId);
     (*tree)->keyType = DT_INT;
+
+    // Allocate memory for BTreeMgmtData
     BTreeMgmtData *btree = (BTreeMgmtData *)malloc(sizeof(BTreeMgmtData));
-    btree->numNodes = 0;
-    btree->numEntries = 0;
-    btree->order = 0;
-    btree->root = NULL;
+
+    SM_FileHandle fh;
+    if (openPageFile(idxId, &fh) != RC_OK) {
+        return RC_FILE_NOT_FOUND;
+    }
+
+    // Read the B-tree metadata (root, order, numNodes, etc.) from the file
+    // Example: Read root node and order from the first page or header page
+    // You need to implement this logic to deserialize the B-tree state from the file
+    btree->numNodes = 1;  // Example: Read from file
+    btree->numEntries = 0; // Example: Read from file
+    btree->order = 3;      // Example: Read from file
+    btree->root = NULL;    // Example: Read from file (initialize root node if necessary)
+
     (*tree)->mgmtData = btree;
+
+    closePageFile(&fh);
     return RC_OK;
 }
+
 
 // Close a B+ Tree index
 RC closeBtree(BTreeHandle *tree) {
@@ -113,6 +174,7 @@ RC deleteBtree(char *idxId) {
 // Get the number of nodes in the B+ Tree
 RC getNumNodes(BTreeHandle *tree, int *result) {
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
+    printf("Current numNodes: %d\n", btree->numNodes); // Debugging output
     *result = btree->numNodes;
     return RC_OK;
 }
@@ -135,32 +197,51 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
     BTreeNode *current = btree->root;
 
-    while (current && !current->isLeaf) {
-        int i = 0;
-        while (i < current->numKeys && key->v.intV > current->keys[i]->v.intV) {
-            i++;
-        }
-        current = (BTreeNode *)current->pointers[i];
-    }
-
+    // Check if the tree is empty
     if (!current) {
         return RC_IM_KEY_NOT_FOUND;
     }
 
+    // Traverse down the tree to find the leaf node
+    while (current && !current->isLeaf) {
+        int i = 0;
+        // Find the appropriate pointer for the key
+        while (i < current->numKeys && key->v.intV > current->keys[i]->v.intV) {
+            i++;
+        }
+
+        if (i < current->numKeys + 1) { // Validate pointer range
+            current = (BTreeNode *)current->pointers[i];
+        } else {
+            return RC_IM_KEY_NOT_FOUND; // Invalid pointer access
+        }
+    }
+
+    // If we've reached a NULL node, the key is not found
+    if (!current) {
+        return RC_IM_KEY_NOT_FOUND;
+    }
+
+    // Search within the leaf node
     for (int i = 0; i < current->numKeys; i++) {
         if (current->keys[i]->v.intV == key->v.intV) {
             *result = *(RID *)current->pointers[i];
             return RC_OK;
         }
     }
+
+    // Key was not found
     return RC_IM_KEY_NOT_FOUND;
 }
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
+    printf("--------------------------\n"); // Debugging output
+
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
 
     // If the tree is empty, initialize the root
+    // printf("Root: %d\n", btree->root);
     if (!btree->root) {
         btree->root = createNode(btree->order, true);
         btree->root->keys[0] = (Value *)malloc(sizeof(Value));
@@ -175,6 +256,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
 
     // Traverse down the tree to find the leaf node
     BTreeNode *current = btree->root;
+    // printf("Is Leaf: %d\n", current->isLeaf);
     while (!current->isLeaf) {
         int i = 0;
         while (i < current->numKeys && key->v.intV > current->keys[i]->v.intV) {
@@ -208,6 +290,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     btree->numEntries++;
 
     // If the node is full, split it
+    printf("Number of keys: %d\n", current->numKeys);
+    printf("Order: %d\n", btree->order);
     if (current->numKeys == btree->order) {
         BTreeNode *newNode = createNode(btree->order, current->isLeaf);
         int midIndex = current->numKeys / 2;
