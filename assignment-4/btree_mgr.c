@@ -37,7 +37,38 @@ void printNode(BTreeNode *node, char **output, int level) {
         strcat(*output, "  ");
     }
 
-    // Print the keys of the node
+    // Print parent keys if they exist
+    if (node->parent != NULL) {
+        *output = realloc(*output, strlen(*output) + 100); // Reserve space for parent keys
+        strcat(*output, "[Parent: ");
+        for (int i = 0; i < node->parent->numKeys; i++) {
+            char keyStr[20];
+            sprintf(keyStr, "%d", node->parent->keys[i]->v.intV);
+            strcat(*output, keyStr);
+            if (i < node->parent->numKeys - 1) {
+                strcat(*output, ", ");
+            }
+        }
+        strcat(*output, "] ");
+    }
+
+    // Print whether this node is a left or right child
+    if (node->parent != NULL) {
+        for (int i = 0; i <= node->parent->numKeys; i++) {
+            if (node->parent->pointers[i] == node) {
+                if (i == 0) {
+                    strcat(*output, "[Left Child] ");
+                } else if (i == node->parent->numKeys) {
+                    strcat(*output, "[Right Child] ");
+                } else {
+                    strcat(*output, "[Middle Child] ");
+                }
+                break;
+            }
+        }
+    }
+
+    // Print the keys of the current node
     *output = realloc(*output, strlen(*output) + 100); // Reserve space for the keys
     strcat(*output, "(");
     for (int i = 0; i < node->numKeys; i++) {
