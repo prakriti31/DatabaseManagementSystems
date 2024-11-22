@@ -563,8 +563,6 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
-    printf("--------------------------\n"); // Debugging output
-
     BTreeMgmtData *btree = (BTreeMgmtData *)tree->mgmtData;
 
     // If the tree is empty, initialize the root
@@ -628,7 +626,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     free(treeStr);
 
     // If the node is full, split it
-    if (current->numKeys == btree->order) {
+    if (current->numKeys == btree->order+1) {
         BTreeNode *newNode = createNode(btree->order, current->isLeaf);
         int midIndex = current->numKeys / 2;
 
