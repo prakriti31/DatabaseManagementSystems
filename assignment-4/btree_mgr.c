@@ -7,27 +7,34 @@
 // Btree has three type of nodes
 // Root, Internal and Leaf
 typedef struct treeNode {
-    int key;
+    int n;
+    int dataType;
     int value;
-    bool isLeaf;
+    bool is_Leaf;
     struct treeNode *left;
     struct treeNode *right;
+    struct treeNode *parent;
 } treeNode;
 
 // init and shutdown index manager
 RC initIndexManager (void *mgmtData) {
-    printf("Index manager was born :)");
+    printf("Index manager was born :)\n");
     return 0;
 }
 RC shutdownIndexManager () {
-    printf("Index Manager is dead ;(");
+    printf("Index Manager is dead ;(\n");
     return 0;
 }
 
 RC createBtree(char *idxId, DataType keyType, int n) {
-    treeNode* result = malloc(sizeof(treeNode));
-    if(result != NULL) {
-
+    treeNode* node = malloc(sizeof(treeNode));
+    if(node != NULL) {
+        node->n = n;
+        node->dataType = keyType;;
+        node->is_Leaf = false;
+        node->left = NULL;
+        node->right = NULL;
+        printf("Node created\n");
     }
 }
 
@@ -66,7 +73,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     printf("--------------------------\n"); // Debugging output
 }
 RC deleteKey(BTreeHandle *tree, Value *key) {
- }
+}
 
 // Open a scan on the B+ Tree
 RC openTreeScan(BTreeHandle *tree, BT_ScanHandle **handle) {
