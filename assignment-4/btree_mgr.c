@@ -1,41 +1,45 @@
 #include "btree_mgr.h"
+#include "buffer_mgr.h"
+#include "storage_mgr.h"
 #include "dberror.h"
 #include "tables.h"
-#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-// Btree has three type of nodes
-// Root, Internal and Leaf
-typedef struct treeNode {
-    int n;
-    int dataType;
-    int value;
-    bool is_Leaf;
-    struct treeNode *left;
-    struct treeNode *right;
-    struct treeNode *parent;
-} treeNode;
+typedef struct treenode {
+    struct treenode *left;
+    struct treenode *right;
+    struct treenode *parent;
+    bool is_leaf;
+    int count;
+};
 
-// init and shutdown index manager
-RC initIndexManager (void *mgmtData) {
-    printf("Index manager was born :)\n");
-    return 0;
+typedef struct BTreeMgmtData {
+    int minDegree;
+    int numNodes;           // Total number of nodes in the tree
+    int numEntries;         // Total number of entries in the tree
+    struct treenode *root;        // Pointer to the root node
+} BTreeMgmtData;
+
+RC initIndexManager(void *mgmtData) {
+    printf("Index Manager was born\n");
+    return RC_OK;
 }
-RC shutdownIndexManager () {
-    printf("Index Manager is dead ;(\n");
-    return 0;
+
+// Shutdown the B+ Tree index manager
+RC shutdownIndexManager(void *mgmtData) {
+    printf("Index Manager was killed\n");
+    return RC_OK;
 }
 
 RC createBtree(char *idxId, DataType keyType, int n) {
-    treeNode* node = malloc(sizeof(treeNode));
-    if(node != NULL) {
-        node->n = n;
-        node->dataType = keyType;;
-        node->is_Leaf = false;
-        node->left = NULL;
-        node->right = NULL;
-        printf("Node created\n");
+    BTreeHandle *btree = (BTreeHandle *)malloc(sizeof(BTreeHandle));
+
+    if (btree == NULL) {
+        printf("B+tree Memory allocation error\n");
     }
+    return RC_OK;
 }
 
 RC openBtree(BTreeHandle **tree, char *idxId) {
@@ -51,15 +55,23 @@ RC deleteBtree(char *idxId) {
 
 // Get the number of nodes in the B+ Tree
 RC getNumNodes(BTreeHandle *tree, int *result) {
+
+
+    return RC_OK;
 }
 
 // Get the number of entries in the B+ Tree
 RC getNumEntries(BTreeHandle *tree, int *result) {
-}
 
+
+    return RC_OK;
+}
 
 // Get the key type of the B+ Tree
 RC getKeyType(BTreeHandle *tree, DataType *result) {
+    *result = tree->keyType;
+
+    return RC_OK;
 }
 
 
@@ -73,7 +85,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     printf("--------------------------\n"); // Debugging output
 }
 RC deleteKey(BTreeHandle *tree, Value *key) {
-}
+ }
 
 // Open a scan on the B+ Tree
 RC openTreeScan(BTreeHandle *tree, BT_ScanHandle **handle) {
@@ -85,4 +97,6 @@ RC nextEntry(BT_ScanHandle *handle, RID *result) {
 
 // Close the scan on the B+ Tree
 RC closeTreeScan(BT_ScanHandle *handle) {
+
+    return RC_OK;
 }
