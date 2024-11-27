@@ -30,7 +30,7 @@ main (void)
 {
   testName = "";
 
-  // testInsertAndFind();
+  testInsertAndFind();
   // testDelete();
   // testIndexScan();
 
