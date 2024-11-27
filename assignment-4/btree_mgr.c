@@ -113,14 +113,36 @@ char *printTree(BTreeHandle *tree) {
 
 // Helper to create a new B+ Tree node
 static BTreeNode *createNode(int order, bool isLeaf) {
+    BTreeNode *node = (BTreeNode *)malloc(sizeof(BTreeNode));
+    node->isLeaf = isLeaf;
+    node->numKeys = 0;
+    node->parent = NULL;
+    int maxKeys = order + 1;
+    node->keys = (Value **)malloc(order * sizeof(Value *));
+    node->pointers = (void **)malloc(maxKeys * sizeof(void *));
+
+    return node;
 }
 
 // Initialize the B+ Tree index manager
 RC initIndexManager(void *mgmtData) {
+    BTreeMgmtData *btreeMgmtData = (BTreeMgmtData *)mgmtData;
+    btreeMgmtData->order = 0;
+    btreeMgmtData->numNodes = 0;
+    btreeMgmtData->numEntries = 0;
+    btreeMgmtData->root = NULL;
+
+    return RC_OK;
 }
 
 // Shutdown the B+ Tree index manager
 RC shutdownIndexManager(void *mgmtData) {
+    BTreeMgmtData *btreeMgmtData = (BTreeMgmtData *)mgmtData;
+
+    free(btreeMgmtData->root);
+    free(btreeMgmtData);
+
+    return RC_OK;
 }
 
 RC createBtree(char *idxId, DataType keyType, int n) {
