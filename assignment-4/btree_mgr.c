@@ -43,8 +43,8 @@ RC shutdownIndexManager(void *mgmtData) {
 
 void * createNode(int n, bool is_leaf, bool is_root) {
     node * newNode = (node *) malloc(sizeof(node));
-    newNode->keys = (int *) malloc(sizeof(int)); // Fixed DT_INT
-    newNode->ptrs = (void **) malloc(sizeof(void *));
+    newNode->keys = (int *) malloc(sizeof(int) * n); // Fixed DT_INT // [(int), (int), .... , n]
+    newNode->ptrs = (void **) malloc(sizeof(void *) * (n + 1)); // No. of pointers will always be +1 than No. of Keys
     newNode->num_keys = 0;
     newNode->is_leaf = is_leaf;
     newNode->next_leaf = NULL;
@@ -100,11 +100,15 @@ RC openBtree(BTreeHandle **tree, char *idxId) {
     SM_FileHandle file_handle;
     openPageFile(idxId, &file_handle);
     metaData *meta_data = (metaData *) malloc(sizeof(metaData));
-
     readBlock(0, &file_handle, meta_data);
 
+    *tree = (BTreeHandle *) malloc(sizeof(BTreeHandle));
     (*tree)->idxId = idxId; // Storing filename in BTreeHandle
     (*tree)->mgmtData = meta_data;
+
+    // Debugging code to check if data is correctly pointed by *tree
+    // metaData *meta = (metaData *) (*tree)->mgmtData;
+    // printf("Metadata: Order = %d, Entries = %d\n", meta->order, meta->entries);
 
     // printf("%d\n",btree->mgmtData);
 
@@ -150,17 +154,43 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
+
+    metaData *meta_data = (metaData *)tree->mgmtData;
+    printf("|| insertKey || Metadata: Order = %d, Entries = %d\n", meta_data->order, meta_data->entries);
+
     // Find correct leaf node L for k
     // We'll have to load root first, as it holds pointers to all other nodes
     // Root is stored in our metadata
 
-    metaData *meta_data = (metaData *)tree->mgmtData;
+    if(meta_data->entries < meta_data->order) {
+        // Used to check if we have space inside root
+        // or need to go to another node
 
-    // Add new entry into L in sorted order
+        // Add new entry into L in sorted order
         // If L has enough space, DONE
+
+        if(meta_data->root->num_keys < meta_data->order) {
+            // The root has space available
+            // Now insert eh key in sorted order into the root
+
+            // Need to find space for the key
+            // If the node is empty key[0] = key
+
+            if(meta_data->root->num_keys == 0) {
+                meta_data->root->keys[0] = key;
+                meta_data->root->num_keys += 1;
+                meta_data->entries += 1;
+
+            }
+
+        }
+
         // Otherwise split L into two nodes L and L1
         // Redistribute entries evenly and copy up middle key
         // Insert index entry pointing to L1 into parent of L
+    }
+
+
     /*
     * inner node: If, during the redistribution and copying of the middle key,
         the parent node of L becomes full, a similar split operation occurs for the
