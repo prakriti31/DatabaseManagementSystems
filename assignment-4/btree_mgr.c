@@ -10,7 +10,7 @@
 #include <stdio.h>
 
 typedef struct node {
-    int * keys; // Array of keys
+    Value * keys; // Array of keys
     void ** ptrs; // Array of pointers. Corresponding to keys with same index
     int num_keys; // Number of keys currently present in the node
     bool is_leaf; // Is the node an internal node or a leaf node?
@@ -43,7 +43,7 @@ RC shutdownIndexManager(void *mgmtData) {
 
 void * createNode(int n, bool is_leaf, bool is_root) {
     node * newNode = (node *) malloc(sizeof(node));
-    newNode->keys = (int *) malloc(sizeof(int) * n); // Fixed DT_INT // [(int), (int), .... , n]
+    newNode->keys = (int *) malloc(sizeof(struct Value) * n); // Fixed DT_INT // [(int), (int), .... , n]
     newNode->ptrs = (void **) malloc(sizeof(void *) * (n + 1)); // No. of pointers will always be +1 than No. of Keys
     newNode->num_keys = 0;
     newNode->is_leaf = is_leaf;
@@ -162,33 +162,29 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // We'll have to load root first, as it holds pointers to all other nodes
     // Root is stored in our metadata
 
-    if(meta_data->entries < meta_data->order) {
+
         // Used to check if we have space inside root
         // or need to go to another node
 
         // Add new entry into L in sorted order
         // If L has enough space, DONE
 
-        if(meta_data->root->num_keys < meta_data->order) {
+
             // The root has space available
             // Now insert eh key in sorted order into the root
+    // if(meta_data->root->num_keys == 0) {
+    //     meta_data->root->keys[0] = key;
+    //     meta_data->root->num_keys += 1;
+    //     meta_data->entries += 1;
+    // }
 
             // Need to find space for the key
             // If the node is empty key[0] = key
 
-            if(meta_data->root->num_keys == 0) {
-                meta_data->root->keys[0] = key;
-                meta_data->root->num_keys += 1;
-                meta_data->entries += 1;
-
-            }
-
-        }
-
         // Otherwise split L into two nodes L and L1
         // Redistribute entries evenly and copy up middle key
         // Insert index entry pointing to L1 into parent of L
-    }
+
 
 
     /*
