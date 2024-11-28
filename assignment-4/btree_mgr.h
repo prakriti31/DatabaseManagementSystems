@@ -16,6 +16,26 @@ typedef struct BT_ScanHandle {
   void *mgmtData;
 } BT_ScanHandle;
 
+typedef struct node {
+  Value * keys; // Array of keys
+  void ** ptrs; // Array of pointers. Corresponding to keys with same index
+  int num_keys; // Number of keys currently present in the node
+  bool is_leaf; // Is the node an internal node or a leaf node?
+  struct node *next_leaf; // Pointer to the next leaf node, if this node is indeed a leaf node
+  struct node *parent; // Parent node for this node, NULL if no parent (Root)
+  bool is_root;
+  int max_keys_per_node;
+  int max_ptrs_per_node;
+} node;
+
+typedef struct metadata {
+  int order; // Maximum number of keys allowed for a node
+  int nodes; // Count for total existing nodes in the tree
+  int entries; // Total number of entries in the index / tree
+  DataType type; // Datatype of the key, Default is DT_INT, extra implementation?
+  node *root; // Root of the tree
+} metaData;
+
 // init and shutdown index manager
 extern RC initIndexManager (void *mgmtData);
 extern RC shutdownIndexManager ();
