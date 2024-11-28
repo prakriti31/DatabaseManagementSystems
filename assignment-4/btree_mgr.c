@@ -26,7 +26,7 @@ typedef struct metadata {
     int nodes; // Count for total existing nodes in the tree
     int entries; // Total number of entries in the index / tree
     DataType type; // Datatype of the key, Default is DT_INT, extra implementation?
-    node * root; // Root of the tree
+    node *root; // Root of the tree
 } metaData;
 
 
@@ -64,7 +64,7 @@ RC createBtree(char *idxId, DataType keyType, int n) {
     meta_data->type = keyType; // Setting the keytype for the key
     meta_data->entries = 0; // Sum of all entries inside all the nodes
 
-    node * root = createNode(meta_data->order,true, true); // This node is a root, which is by default a leaf as well.
+    node *root = createNode(meta_data->order,true, true); // This node is a root, which is by default a leaf as well.
     meta_data->root = root;
     meta_data->nodes = 1; // ROOT node
 
@@ -103,13 +103,11 @@ RC openBtree(BTreeHandle **tree, char *idxId) {
 
     readBlock(0, &file_handle, meta_data);
 
-    BTreeHandle *btree = (BTreeHandle *) malloc(sizeof(BTreeHandle));
-    btree->idxId = idxId; // Storing filename in BTreeHandle
-    btree->mgmtData = &meta_data;
+    (*tree)->idxId = idxId; // Storing filename in BTreeHandle
+    (*tree)->mgmtData = meta_data;
 
     // printf("%d\n",btree->mgmtData);
 
-    *tree = btree;
 
     closePageFile(&file_handle);
     return RC_OK;
@@ -156,8 +154,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // We'll have to load root first, as it holds pointers to all other nodes
     // Root is stored in our metadata
 
-    BTreeHandle *btree = (BTreeHandle *) malloc(sizeof(BTreeHandle));
-    printf("File name from *tree -> %s\n",tree->idxId);
+    metaData *meta_data = (metaData *)tree->mgmtData;
+
     // Add new entry into L in sorted order
         // If L has enough space, DONE
         // Otherwise split L into two nodes L and L1
