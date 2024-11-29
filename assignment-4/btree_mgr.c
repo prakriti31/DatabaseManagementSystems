@@ -130,12 +130,70 @@ RC getKeyType(BTreeHandle *tree, DataType *result) {
 RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 }
 
+int compareKeys(Value *key1, Value *key2) {
+    if (key1->v.intV < key2->v.intV) return -1;
+    if (key1->v.intV > key2->v.intV) return 1;
+    return 0;
+}
+
+void sortArray(int *arr, int size) {
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = 0; j < size - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                // Swap arr[j] and arr[j + 1]
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+}
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
 
     metaData *meta_data = (metaData *)tree->mgmtData;
+    node *current_node = meta_data->root;
+
     printf("|| insertKey || Metadata: Order = %d, Entries = %d\n", meta_data->order, meta_data->entries);
+
+    printf("current_node->num_keys = %d\n", current_node->num_keys);
+    printf("current_node->is_leaf = %d\n", current_node->is_leaf);
+    // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
+    while (!current_node->is_leaf) {
+        // Traverse internal nodes, find the correct child pointer to follow
+        int i = 0;
+        while (i < current_node->num_keys && compareKeys(&key, &current_node->keys[i]) >= 0) {
+            i++;
+        }
+        current_node = (node *)current_node->ptrs[i];
+    }
+
+    if (current_node->num_keys < current_node->max_keys_per_node) {
+        // // Insert the key in the right position in the leaf node
+        // int i = current_node->num_keys - 1;
+        // while (i >= 0 && compareKeys(&key, &current_node->keys[i]) < 0) {
+        //     current_node->keys[i + 1] = current_node->keys[i];
+        //     current_node->ptrs[i + 1] = current_node->ptrs[i];
+        //     i--;
+        // }
+
+        // // Insert the new key and the corresponding pointer (RID)
+        // current_node->keys[i + 1] = *key;
+        // current_node->ptrs[i + 1] = (void *)(&rid);
+
+
+        // Insert the new key and the corresponding pointer (RID)
+        int numKeys = current_node->num_keys;
+        current_node->keys[numKeys] = *key;
+        current_node->ptrs[numKeys] = (void *)(&rid);
+        sortArray(current_node->keys, numKeys);
+        sortArray(current_node->ptrs, numKeys);
+        current_node->num_keys++;
+        meta_data->entries++;
+
+        return RC_OK;
+    }
 
     // Find correct leaf node L for k
     // We'll have to load root first, as it holds pointers to all other nodes
