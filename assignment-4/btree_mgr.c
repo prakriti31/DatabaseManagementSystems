@@ -136,18 +136,24 @@ int compareKeys(Value *key1, Value *key2) {
     return 0;
 }
 
-void sortArray(int *arr, int size) {
+void sortKeys(Value *arr, void **ptr, int size) {
     for (int i = 0; i < size - 1; i++) {
         for (int j = 0; j < size - i - 1; j++) {
-            if (arr[j] > arr[j + 1]) {
-                // Swap arr[j] and arr[j + 1]
-                int temp = arr[j];
-                arr[j] = arr[j + 1];
-                arr[j + 1] = temp;
+            if (arr[j].v.intV > arr[j + 1].v.intV) {
+                // Swap the keys
+                int temp_key = arr[j].v.intV;
+                arr[j].v.intV = arr[j + 1].v.intV;
+                arr[j + 1].v.intV = temp_key;
+
+                // Swap the pointers
+                void *temp_ptr = ptr[j];
+                ptr[j] = ptr[j + 1];
+                ptr[j + 1] = temp_ptr;
             }
         }
     }
 }
+
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
@@ -155,10 +161,11 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    printf("|| insertKey || Metadata: Order = %d, Entries = %d\n", meta_data->order, meta_data->entries);
+    // printf("|| insertKey || Metadata: Order = %d, Entries = %d\n", meta_data->order, meta_data->entries);
 
     printf("current_node->num_keys = %d\n", current_node->num_keys);
     printf("current_node->is_leaf = %d\n", current_node->is_leaf);
+
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -169,31 +176,43 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node = (node *)current_node->ptrs[i];
     }
 
+    // -------------------------------------------------------------------------------
+
     if (current_node->num_keys < current_node->max_keys_per_node) {
-        // // Insert the key in the right position in the leaf node
-        // int i = current_node->num_keys - 1;
-        // while (i >= 0 && compareKeys(&key, &current_node->keys[i]) < 0) {
-        //     current_node->keys[i + 1] = current_node->keys[i];
-        //     current_node->ptrs[i + 1] = current_node->ptrs[i];
-        //     i--;
-        // }
-
-        // // Insert the new key and the corresponding pointer (RID)
-        // current_node->keys[i + 1] = *key;
-        // current_node->ptrs[i + 1] = (void *)(&rid);
-
+        printf("Before insertion: current_node->keys\n");
+        for (int i = 0; i < current_node->num_keys; i++) {
+            printf("%d, ", current_node->keys[i].v.intV);
+        }
+        printf("\n");
 
         // Insert the new key and the corresponding pointer (RID)
         int numKeys = current_node->num_keys;
         current_node->keys[numKeys] = *key;
         current_node->ptrs[numKeys] = (void *)(&rid);
-        sortArray(current_node->keys, numKeys);
-        sortArray(current_node->ptrs, numKeys);
+        sortKeys(current_node->keys, current_node->ptrs, numKeys);
         current_node->num_keys++;
         meta_data->entries++;
 
+        printf("After insertion: current_node->keys\n");
+        for (int i = 0; i < current_node->num_keys; i++) {
+            printf("%d, ", current_node->keys[i].v.intV);
+        }
+        printf("\n");
         return RC_OK;
     }
+
+    // -------------------------------------------------------------------------------
+
+    node *new_node = (node *)malloc(sizeof(node));
+
+    // // 3. Handle node overflow: Split the node and propagate the middle key to the parent
+    // node *new_node = (node *)malloc(sizeof(node));
+    // new_node->keys = (int *)malloc(current_node->max_keys_per_node * sizeof(int));
+    // new_node->ptrs = (void **)malloc(current_node->max_ptrs_per_node * sizeof(void *));
+    // new_node->num_keys = 0;
+    // new_node->is_leaf = current_node->is_leaf;
+    // new_node->parent = current_node->parent;
+    // new_node->is_root = false;
 
     // Find correct leaf node L for k
     // We'll have to load root first, as it holds pointers to all other nodes
