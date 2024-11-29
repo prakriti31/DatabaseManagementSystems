@@ -9,6 +9,67 @@
 #include <string.h>
 #include <stdio.h>
 
+// Helper function to recursively print the tree structure
+void printNode(node *currentNode, char **output, int level) {
+    // Add indentation based on the level of the node in the tree
+    for (int i = 0; i < level; i++) {
+        *output = realloc(*output, strlen(*output) + 3); // Add space for "  "
+        strcat(*output, "  ");
+    }
+
+    // Print whether this node is a root or a leaf
+    if (currentNode->is_root) {
+        strcat(*output, "[Root] ");
+    } else if (currentNode->is_leaf) {
+        strcat(*output, "[Leaf] ");
+    } else {
+        strcat(*output, "[Internal] ");
+    }
+
+    // Print the keys in the current node
+    *output = realloc(*output, strlen(*output) + 50); // Reserve space for keys
+    strcat(*output, "(");
+    for (int i = 0; i < currentNode->num_keys; i++) {
+        char keyStr[20];
+        sprintf(keyStr, "%d", currentNode->keys[i].v.intV);
+        strcat(*output, keyStr);
+        if (i < currentNode->num_keys - 1) {
+            strcat(*output, ", ");
+        }
+    }
+    strcat(*output, ")\n");
+
+    // If it's a non-leaf node, recursively print the child nodes
+    if (!currentNode->is_leaf) {
+        for (int i = 0; i <= currentNode->num_keys; i++) {
+            printNode((node *)currentNode->ptrs[i], output, level + 1);
+        }
+    }
+}
+
+// Print the entire B+ Tree starting from the root
+char *printTree(BTreeHandle *tree) {
+    if (tree == NULL || tree->mgmtData == NULL) {
+        return strdup("Error: Tree is not initialized.");
+    }
+
+    // Access the metadata and root node
+    metaData *meta_data = (metaData *)tree->mgmtData;
+
+    // Allocate memory for the output string
+    char *output = (char *)malloc(1);
+    output[0] = '\0'; // Start with an empty string
+
+    // Print the root node and all its children
+    if (meta_data->root != NULL) {
+        printNode(meta_data->root, &output, 0);
+    } else {
+        return strdup("Tree is empty.");
+    }
+
+    return output; // Return the dynamically allocated string containing the tree structure
+}
+
 RC initIndexManager(void *mgmtData) {
     printf("Index Manager was born\n");
     return RC_OK;
@@ -157,20 +218,26 @@ void sortKeys(Value *arr, void **ptr, int size) {
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
+    printf("Inserting Key: %d\n", key->v.intV);
+    printf("---------- Tree before insertion ----------\n");
+    char *treeStructure_before = printTree(tree);
+    printf("%s", treeStructure_before);
+    free(treeStructure_before); // Free the allocated memory after use
 
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
     // printf("|| insertKey || Metadata: Order = %d, Entries = %d\n", meta_data->order, meta_data->entries);
 
-    printf("current_node->num_keys = %d\n", current_node->num_keys);
-    printf("current_node->is_leaf = %d\n", current_node->is_leaf);
+    // printf("current_node->num_keys = %d\n", current_node->num_keys);
+    // printf("current_node->is_leaf = %d\n", current_node->is_leaf);
+    // printf("current_node->parent = %p\n", current_node->parent);
 
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
         int i = 0;
-        while (i < current_node->num_keys && compareKeys(&key, &current_node->keys[i]) >= 0) {
+        while (i < current_node->num_keys && compareKeys(&key, &current_node->keys[i]) >= 0) { // compareKeys(k1,k2) - k1>k2 -> return 1 || k1 < k2 -> return -1
             i++;
         }
         current_node = (node *)current_node->ptrs[i];
@@ -178,12 +245,13 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
 
     // -------------------------------------------------------------------------------
 
+    // 2. Inserting
     if (current_node->num_keys < current_node->max_keys_per_node) {
-        printf("Before insertion: current_node->keys\n");
-        for (int i = 0; i < current_node->num_keys; i++) {
-            printf("%d, ", current_node->keys[i].v.intV);
-        }
-        printf("\n");
+        // printf("Before insertion: current_node->keys\n");
+        // for (int i = 0; i < current_node->num_keys; i++) {
+            // printf("%d, ", current_node->keys[i].v.intV);
+        // }
+        // printf("\n");
 
         // Insert the new key and the corresponding pointer (RID)
         int numKeys = current_node->num_keys;
@@ -193,67 +261,70 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->num_keys++;
         meta_data->entries++;
 
-        printf("After insertion: current_node->keys\n");
-        for (int i = 0; i < current_node->num_keys; i++) {
-            printf("%d, ", current_node->keys[i].v.intV);
-        }
-        printf("\n");
+
+        printf("---------- Tree after insertion ----------\n");
+        char *treeStructure_after = printTree(tree);
+        printf("%s", treeStructure_after);
+        free(treeStructure_after); // Free the allocated memory after use
+        printf("-----------------------------------------------------\n");
+
         return RC_OK;
     }
 
     // -------------------------------------------------------------------------------
 
-    node *new_node = (node *)malloc(sizeof(node));
-
-    // // 3. Handle node overflow: Split the node and propagate the middle key to the parent
+    // 3. If node is overflowed, creating new node (Splitting)
+    node *new_node = createNode(meta_data->order,true, false);
     // node *new_node = (node *)malloc(sizeof(node));
-    // new_node->keys = (int *)malloc(current_node->max_keys_per_node * sizeof(int));
+    // new_node->keys = (Value *)malloc(current_node->max_keys_per_node * sizeof(int));
     // new_node->ptrs = (void **)malloc(current_node->max_ptrs_per_node * sizeof(void *));
     // new_node->num_keys = 0;
-    // new_node->is_leaf = current_node->is_leaf;
-    // new_node->parent = current_node->parent;
     // new_node->is_root = false;
+    // new_node->is_leaf = current_node->is_leaf;
+    new_node->parent = current_node->parent;
 
-    // Find correct leaf node L for k
-    // We'll have to load root first, as it holds pointers to all other nodes
-    // Root is stored in our metadata
+    int mid = current_node->max_keys_per_node / 2;
+    for (int i = mid + 1; i < current_node->num_keys; i++) {
+        new_node->keys[i - (mid + 1)] = current_node->keys[i];
+        new_node->ptrs[i - (mid + 1)] = current_node->ptrs[i];
+        new_node->num_keys++;
+    }
 
+    if (compareKeys(&key, &current_node->keys[mid]) >= 0) {
+        // Insert new key after copying
+        int insert_pos = new_node->num_keys;
+        new_node->keys[insert_pos] = *key;
+        new_node->ptrs[insert_pos] = (void *)(&rid);
+        new_node->num_keys++;
+        sortKeys(new_node->keys, new_node->ptrs, new_node->num_keys);
+    }
 
-        // Used to check if we have space inside root
-        // or need to go to another node
+    current_node->num_keys = mid + 1;
 
-        // Add new entry into L in sorted order
-        // If L has enough space, DONE
+    if (current_node->is_root == true) {
+        node *new_root = createNode(meta_data->order,false, true);
 
+        new_root->keys[0] = new_node->keys[0];
+        new_root->num_keys++;
+        new_root->ptrs[0] = current_node;
+        new_root->ptrs[1] = new_node;
 
-            // The root has space available
-            // Now insert eh key in sorted order into the root
-    // if(meta_data->root->num_keys == 0) {
-    //     meta_data->root->keys[0] = key;
-    //     meta_data->root->num_keys += 1;
-    //     meta_data->entries += 1;
-    // }
+        current_node->parent = new_root;
+        new_node->parent = new_root;
+        current_node->is_root = false;
 
-            // Need to find space for the key
-            // If the node is empty key[0] = key
+        meta_data->root = new_root;
+    }
+    else {
+        insertKey(tree, &new_node->keys[0], rid);  // Recursive call to insert into the parent
+    }
 
-        // Otherwise split L into two nodes L and L1
-        // Redistribute entries evenly and copy up middle key
-        // Insert index entry pointing to L1 into parent of L
-
-
-
-    /*
-    * inner node: If, during the redistribution and copying of the middle key,
-        the parent node of L becomes full, a similar split operation occurs for the
-        parent node.
-        Entries are redistributed evenly between the parent node and a new node
-        created as a result of the split.
-        The middle key from this split is pushed up further to the parent’s
-        parent node.
-        This process continues recursively up the tree until it reaches the root
-        node.
-     */
+    printf("---------- Tree after insertion ----------\n");
+    char *treeStructure_after = printTree(tree);
+    printf("%s", treeStructure_after);
+    free(treeStructure_after); // Free the allocated memory after use
+    printf("-----------------------------------------------------\n");
+    return RC_OK;
 }
 RC deleteKey(BTreeHandle *tree, Value *key) {
  }
