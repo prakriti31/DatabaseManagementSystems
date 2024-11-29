@@ -221,16 +221,28 @@ RC getKeyType(BTreeHandle *tree, DataType *result) {
     return RC_OK;
 }
 
-
-// Find a key in the B+ Tree
-RC findKey(BTreeHandle *tree, Value *key, RID *result) {
-}
-
 int compareKeys(Value *key1, Value *key2) {
     if (key1->v.intV < key2->v.intV) return -1;
     if (key1->v.intV > key2->v.intV) return 1;
     return 0;
 }
+
+// Find a key in the B+ Tree
+RC findKey(BTreeHandle *tree, Value *key, RID *result) {
+
+    // First get the root, as it the starting point for our search
+    metaData *meta_data = (metaData *)tree->mgmtData;
+
+    // Compare keys and root->keys and redirect for traversal
+    int compare_result = compareKeys(key,meta_data->root->keys);
+
+    if(compare_result == -1) {
+        //  
+    }
+
+
+}
+
 
 void sortKeys(Value *arr, void **ptr, int size) {
     for (int i = 0; i < size - 1; i++) {
@@ -275,6 +287,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
+    current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -293,7 +306,9 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         int numKeys = current_node->num_keys;
         current_node->keys[numKeys] = *key;
         current_node->ptrs[numKeys] = (void *)(&rid);
-        sortKeys(current_node->keys, current_node->ptrs, numKeys);
+        if(numKeys + 1 > 1) { // Only sort if we have more than 1 keys
+            sortKeys(current_node->keys, current_node->ptrs, numKeys);
+        }
         current_node->num_keys++;
         meta_data->entries++;
 
@@ -312,7 +327,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // 3. If node is overflowed, creating new node (Splitting)
     node *new_node = createNode(meta_data->order,true, false);
     meta_data->nodes++;
-    new_node->parent = current_node->parent;
+    new_node->parent = current_node->parent; // Fails if we have one leaf node and another root node // Fixed this by setting the parent of root as the parent itself, may cause recursion??
 
     // ----------------------------------------------------------------
     // Add the new key in existing keys array, then sort, then split
@@ -344,7 +359,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         meta_data->nodes++;
         new_root->keys[0] = new_node->keys[0];
         new_root->num_keys++;
-        meta_data->entries++;
+        // meta_data->entries++;
         new_root->ptrs[0] = current_node;
         new_root->ptrs[1] = new_node;
 
@@ -359,9 +374,10 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // ----------------------------------------------------------------
     else {
         insertIntoParent(new_node->parent, key, rid);
-        new_node->parent = current_node->parent;
-        current_node->ptrs[current_node->num_keys] = new_node;
-        meta_data->entries++;
+        // new_node->parent = current_node->parent; // We're already doing this once above
+        // current_node->ptrs[current_node->num_keys] = new_node; // Why? This seems incorrect, we can use next_leaf to point to neighbouring leafs
+        // meta_data->entries++; // No need to update entries here, as it was just copied from leaf to the parent/root. entries was already update previously
+        meta_data->root->ptrs[current_node->num_keys] = new_node;
         // node *parent_node = (node *) current_node->parent;
         // printf("parent->num_keys: %d\n", parent_node->num_keys);
         // for (int i = 0; i < current_node->parent->num_keys; i++) {
@@ -381,6 +397,15 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // free(treeStructure_after); // Free the allocated memory after use
     // printf("-----------------------------------------------------\n");
 
+
+
+    for (int k = 0; k < 2; k++) {
+        printf("Root/ parent contents: %d\n",current_node->parent->keys[k].v.intV);
+    }
+    printf("-------------------------------------------\n");
+    printf("Nodes: %d\n",meta_data->nodes);
+    printf("Entries: %d\n",meta_data->entries);
+    printf("-------------------------------------------\n");
     return RC_OK;
 }
 
