@@ -217,14 +217,14 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 }
 
 
-void sortKeys(Value *arr, void **ptr, int size) {
+void sortKeys(Value *key, void **ptr, int size) {
     for (int i = 0; i < size - 1; i++) {
         for (int j = 0; j < size - i - 1; j++) {
-            if (arr[j].v.intV > arr[j + 1].v.intV) {
+            if (key[j].v.intV > key[j + 1].v.intV) {
                 // Swap the keys
-                int temp_key = arr[j].v.intV;
-                arr[j].v.intV = arr[j + 1].v.intV;
-                arr[j + 1].v.intV = temp_key;
+                int temp_key = key[j].v.intV;
+                key[j].v.intV = key[j + 1].v.intV;
+                key[j + 1].v.intV = temp_key;
 
                 // Swap the pointers
                 void *temp_ptr = ptr[j];
@@ -241,8 +241,8 @@ void insertIntoParent(node *parent, Value *key, RID rid) {
     new_node->keys[numKeys] = *key;
     new_node->ptrs[numKeys+1] = (void *)(&rid);
     new_node->rids[numKeys] = rid;
-    sortKeys(new_node->keys, new_node->ptrs, numKeys);
     new_node->num_keys++;
+    sortKeys(new_node->keys, new_node->ptrs, numKeys);
 }
 
 // Insert key into the B+ Tree
@@ -252,7 +252,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    current_node->parent = current_node;
+    // current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -272,11 +272,10 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->keys[numKeys] = *key;
         current_node->ptrs[numKeys] = (void *)(&rid);
         current_node->rids[numKeys] = (rid);
-        if(numKeys + 1 > 1) { // Only sort if we have more than 1 keys
-            sortKeys(current_node->keys, current_node->ptrs, numKeys);
-        }
         current_node->num_keys++;
         meta_data->entries++;
+
+        sortKeys(current_node->keys, current_node->ptrs, numKeys);
 
         printTree(tree);
         return RC_OK;
@@ -301,6 +300,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         new_node->rids[i - (mid + 1)] = current_node->rids[i];
         new_node->num_keys++;
         meta_data->entries++;
+
+        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
     }
 
     if (compareKeys(key, &current_node->keys[mid]) >= 0) {
