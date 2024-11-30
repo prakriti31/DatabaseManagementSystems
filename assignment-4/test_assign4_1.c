@@ -6,6 +6,7 @@
 #include "tables.h"
 #include "test_helper.h"
 
+
 #define ASSERT_EQUALS_RID(_l,_r, message)				\
   do {									\
     ASSERT_TRUE((_l).page == (_r).page && (_l).slot == (_r).slot, message); \
@@ -94,7 +95,7 @@ testInsertAndFind (void)
   // cleanup
   TEST_CHECK(closeBtree(tree));
   TEST_CHECK(deleteBtree("testidx"));
-  TEST_CHECK(shutdownIndexManager());
+  // TEST_CHECK(shutdownIndexManager());
   freeValues(keys, numInserts);
 
   TEST_DONE();

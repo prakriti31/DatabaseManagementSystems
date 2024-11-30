@@ -9,99 +9,11 @@
 #include <string.h>
 #include <stdio.h>
 
-// // Helper function to recursively print the tree structure
-// void printNode(node *currentNode, char **output, int *outputSize, int *currentLength, int level) {
-//     // Create indentation string based on the level of the node in the tree
-//     char indent[3 * level + 1];  // At most 3 spaces per level
-//     for (int i = 0; i < level; i++) {
-//         indent[i * 2] = ' ';  // Add space for indentation
-//         indent[i * 2 + 1] = ' ';
-//     }
-//     indent[3 * level] = '\0'; // Null terminate the string
-//
-//     // Check if the buffer is large enough, and grow it if needed
-//     int requiredSize = *currentLength + strlen(indent) + 50 + currentNode->num_keys * 20; // Add space for indent + keys
-//     if (*outputSize < requiredSize) {
-//         *outputSize = requiredSize + 100;  // Allocate extra space
-//         *output = realloc(*output, *outputSize);
-//         if (*output == NULL) {
-//             return;  // Return if memory allocation failed
-//         }
-//     }
-//
-//     // Add the indentation to the output string
-//     strcat(*output, indent);
-//     *currentLength += strlen(indent);
-//
-//     // Print whether this node is a root or a leaf
-//     if (currentNode->is_root) {
-//         strcat(*output, "[Root] ");
-//     } else if (currentNode->is_leaf) {
-//         strcat(*output, "[Leaf] ");
-//     } else {
-//         strcat(*output, "[Internal] ");
-//     }
-//     *currentLength += strlen(*output + *currentLength);
-//
-//     // Print the keys in the current node
-//     strcat(*output, "(");  // Opening parenthesis for keys
-//     *currentLength += 1;
-//
-//     for (int i = 0; i < currentNode->num_keys; i++) {
-//         char keyStr[20];
-//         sprintf(keyStr, "%d", currentNode->keys[i].v.intV);
-//         strcat(*output, keyStr);
-//         *currentLength += strlen(keyStr);
-//         if (i < currentNode->num_keys - 1) {
-//             strcat(*output, ", ");
-//             *currentLength += 2;
-//         }
-//     }
-//     strcat(*output, ")");  // Closing parenthesis for keys
-//     *currentLength += 1;
-//     strcat(*output, "\n");  // Newline after keys
-//     *currentLength += 1;
-//
-//     // If it's a non-leaf node, recursively print the child nodes
-//     if (!currentNode->is_leaf) {
-//         for (int i = 0; i <= currentNode->num_keys; i++) {
-//             printNode((node *)currentNode->ptrs[i], output, outputSize, currentLength, level + 1);
-//         }
-//     }
-// }
-//
-// // Print the entire B+ Tree starting from the root
-// char *printTree(BTreeHandle *tree) {
-//     if (tree == NULL || tree->mgmtData == NULL) {
-//         return strdup("Error: Tree is not initialized.");
-//     }
-//
-//     // Access the metadata and root node
-//     metaData *meta_data = (metaData *)tree->mgmtData;
-//
-//     // Allocate memory for the output string, start with a larger buffer size
-//     int outputSize = 200;
-//     char *output = (char *)malloc(outputSize);
-//     if (output == NULL) {
-//         return strdup("Error: Memory allocation failed.");
-//     }
-//     output[0] = '\0'; // Start with an empty string
-//     int currentLength = 0; // Current length of the output string
-//
-//     // Print the root node and all its children
-//     if (meta_data->root != NULL) {
-//         printNode(meta_data->root, &output, &outputSize, &currentLength, 0);
-//     } else {
-//         free(output);
-//         return strdup("Tree is empty.");
-//     }
-//
-//     return output; // Return the dynamically allocated string containing the tree structure
-// }
 
 
 RC initIndexManager(void *mgmtData) {
     printf("Index Manager was born\n");
+
     return RC_OK;
 }
 
@@ -181,6 +93,7 @@ RC openBtree(BTreeHandle **tree, char *idxId) {
     // metaData *meta = (metaData *) (*tree)->mgmtData;
     // printf("Metadata: Order = %d, Entries = %d\n", meta->order, meta->entries);
 
+
     // printf("%d\n",btree->mgmtData);
 
 
@@ -188,12 +101,18 @@ RC openBtree(BTreeHandle **tree, char *idxId) {
     return RC_OK;
 }
 
-// Close a B+ Tree index
 RC closeBtree(BTreeHandle *tree) {
+    printf("We are closing Btree!!!\n");
+    free(tree);
+    return RC_OK;
 }
 
 // Delete a B+ Tree index
 RC deleteBtree(char *idxId) {
+    printf("We are deleting Btree!!!\n");
+    if(remove(idxId)!=0)        //check whether the name exists
+        return RC_FILE_NOT_FOUND;
+    return RC_OK;
 }
 
 // Get the number of nodes in the B+ Tree
@@ -234,28 +153,6 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    for (int i = 0; i < current_node->num_keys; i++) {
-        printf("%d, ", current_node->keys[i].v.intV);
-    }
-    printf("\n===============================\n");
-
-    node *first = current_node->ptrs[0];
-    for (int i = 0; i < current_node->num_keys; i++) {
-        printf("%d, ", first->keys[i].v.intV);
-    }
-    printf("\n===============================\n");
-
-    node *second = current_node->ptrs[1];
-    for (int i = 0; i < current_node->num_keys; i++) {
-        printf("%d, ",second->keys[i].v.intV);
-    }
-    printf("\n===============================\n");
-
-    node *third = current_node->ptrs[2];
-    for (int i = 0; i < current_node->num_keys; i++) {
-        printf("%d, ",third->keys[i].v.intV);
-    }
-    printf("\n===============================\n");
 
 
     // current_node->parent = current_node;
@@ -268,13 +165,6 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
         }
         current_node = (node *)current_node->ptrs[i];
     }
-    printf("num_keys: %d\n", current_node->num_keys);
-    // printf("key: %d\n", key->v.intV);
-    // for (int j = 0; j < current_node->num_keys; j++) {
-    //     printf("node_keys: %d, ", current_node->keys[j].v.intV);
-    // }
-    printf("\n===============================================\n");
-
     for(int j = 0; j < current_node->num_keys; j++) {
         if(compareKeys(key, &current_node->keys[j]) == 0) {
             *result = current_node->rids[j];
@@ -307,30 +197,20 @@ void insertIntoParent(node *parent, Value *key, RID rid) {
     node *new_node = parent;
     int numKeys = new_node->num_keys;
     new_node->keys[numKeys] = *key;
-    new_node->ptrs[numKeys] = (void *)(&rid);
+    new_node->ptrs[numKeys+1] = (void *)(&rid);
     new_node->rids[numKeys] = rid;
     sortKeys(new_node->keys, new_node->ptrs, numKeys);
     new_node->num_keys++;
-    printf("Keys:\n");
-    for (int i = 0; i < new_node->num_keys; i++) {
-        printf("%d, ", new_node->keys[i].v.intV);
-    }
-    printf("\n");
 }
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     printf("Inserting Key: %d\n", key->v.intV);
-    // printf("---------- Tree before insertion ----------\n");
-    // char *treeStructure_before = printTree(tree);
-    // printf("%s", treeStructure_before);
-    // free(treeStructure_before); // Free the allocated memory after use
-    // printf("-----------------------------------------------------\n");
 
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    // current_node->parent = current_node;
+    current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -356,13 +236,6 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->num_keys++;
         meta_data->entries++;
 
-
-        // printf("---------- Tree after insertion ----------\n");
-        // char *treeStructure_after = printTree(tree);
-        // printf("%s", treeStructure_after);
-        // free(treeStructure_after); // Free the allocated memory after use
-        // printf("-----------------------------------------------------\n");
-
         return RC_OK;
     }
 
@@ -371,7 +244,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // 3. If node is overflowed, creating new node (Splitting)
     node *new_node = createNode(meta_data->order,true, false);
     meta_data->nodes++;
-    new_node->parent = current_node->parent; // Fails if we have one leaf node and another root node // Fixed this by setting the parent of root as the parent itself, may cause recursion??
+    new_node->parent = current_node->parent; // Fails if we have one leaf node and another root node // Fixed this by setting the parent of root as the parent itself, may cause recursion related errors??
 
     // ----------------------------------------------------------------
     // Add the new key in existing keys array, then sort, then split
@@ -419,44 +292,10 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // Infinite loop ho raha hai because we are not handling non-leaf node. If current_node is roo
     // ----------------------------------------------------------------
     else {
-        node *temp_node = new_node->parent;
-        int numKeys2 = current_node->num_keys;
-        insertIntoParent(temp_node, key, rid);
-        // new_node->parent = current_node->parent; // We're already doing this once above
-        // current_node->ptrs[current_node->num_keys] = new_node; // Why? This seems incorrect, we can use next_leaf to point to neighbouring leafs
-        // meta_data->entries++; // No need to update entries here, as it was just copied from leaf to the parent/root. entries was already update previously
-
-        temp_node->ptrs[numKeys2] = new_node;
-        // new_node->parent->ptrs[current_node->num_keys] = new_node;
-        // meta_data->root->ptrs[current_node->num_keys] = new_node;
-        // node *parent_node = (node *) current_node->parent;
-        // printf("parent->num_keys: %d\n", parent_node->num_keys);
-        // for (int i = 0; i < current_node->parent->num_keys; i++) {
-        //     printf("%d, ",current_node->parent->keys[i].v.intV);
-        // }
-        // printf("\n");
-        // int parent_insert_pos = parent_node->num_keys;
-        // printf("%d\n",parent_insert_pos);
-        // parent_node->keys[parent_insert_pos] = *key;
-        // parent_node->num_keys++;
-        // insertKey(tree, &new_node->keys[0], rid);  // Recursive call to insert into the parent
+        insertIntoParent(new_node->parent, key, rid);
+        meta_data->root->ptrs[current_node->num_keys] = new_node;
     }
-    //
-    // printf("---------- Tree after insertion ----------\n");
-    // char *treeStructure_after = printTree(tree);
-    // printf("%s", treeStructure_after);
-    // free(treeStructure_after); // Free the allocated memory after use
-    // printf("-----------------------------------------------------\n");
 
-
-
-    for (int k = 0; k < 2; k++) {
-        printf("Root/ parent contents: %d\n",current_node->parent->keys[k].v.intV);
-    }
-    printf("-------------------------------------------\n");
-    printf("Nodes: %d\n",meta_data->nodes);
-    printf("Entries: %d\n",meta_data->entries);
-    printf("-------------------------------------------\n");
     return RC_OK;
 }
 
