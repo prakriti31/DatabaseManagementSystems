@@ -18,6 +18,7 @@ typedef struct BT_ScanHandle {
 
 typedef struct node {
   Value * keys; // Array of keys
+  RID * rids;
   void ** ptrs; // Array of pointers. Corresponding to keys with same index
   int num_keys; // Number of keys currently present in the node
   bool is_leaf; // Is the node an internal node or a leaf node?

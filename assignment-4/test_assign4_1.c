@@ -87,7 +87,6 @@ testInsertAndFind (void)
       int pos = rand() % numInserts;
       RID rid;
       Value *key = keys[pos];
-
       TEST_CHECK(findKey(tree, key, &rid));
       ASSERT_EQUALS_RID(insert[pos], rid, "did we find the correct RID?");
     }

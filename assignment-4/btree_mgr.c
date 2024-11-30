@@ -115,6 +115,7 @@ void * createNode(int n, bool is_leaf, bool is_root) {
     node * newNode = (node *) malloc(sizeof(node));
     newNode->keys = (Value *) malloc(sizeof(struct Value) * n); // Fixed DT_INT // [(int), (int), .... , n]
     newNode->ptrs = (void **) malloc(sizeof(void *) * (n + 1)); // No. of pointers will always be +1 than No. of Keys
+    newNode->rids = (RID *) malloc(sizeof(struct RID) * (n + 1));
     newNode->num_keys = 0;
     newNode->is_leaf = is_leaf;
     newNode->next_leaf = NULL;
@@ -229,12 +230,35 @@ int compareKeys(Value *key1, Value *key2) {
 
 // Find a key in the B+ Tree
 RC findKey(BTreeHandle *tree, Value *key, RID *result) {
-
     // First get the root, as it the starting point for our search
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    current_node->parent = current_node;
+    for (int i = 0; i < current_node->num_keys; i++) {
+        printf("%d, ", current_node->keys[i].v.intV);
+    }
+    printf("\n===============================\n");
+
+    node *first = current_node->ptrs[0];
+    for (int i = 0; i < current_node->num_keys; i++) {
+        printf("%d, ", first->keys[i].v.intV);
+    }
+    printf("\n===============================\n");
+
+    node *second = current_node->ptrs[1];
+    for (int i = 0; i < current_node->num_keys; i++) {
+        printf("%d, ",second->keys[i].v.intV);
+    }
+    printf("\n===============================\n");
+
+    node *third = current_node->ptrs[2];
+    for (int i = 0; i < current_node->num_keys; i++) {
+        printf("%d, ",third->keys[i].v.intV);
+    }
+    printf("\n===============================\n");
+
+
+    // current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -244,17 +268,20 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
         }
         current_node = (node *)current_node->ptrs[i];
     }
-    for(int j = 0; j < current_node->num_keys; j++) {
-        if(key->v.intV == current_node->keys[j].v.intV) {
-            *result = *((RID*) current_node->ptrs[j]);
-            // result = (RID*) current_node->ptrs[j];
+    printf("num_keys: %d\n", current_node->num_keys);
+    // printf("key: %d\n", key->v.intV);
+    // for (int j = 0; j < current_node->num_keys; j++) {
+    //     printf("node_keys: %d, ", current_node->keys[j].v.intV);
+    // }
+    printf("\n===============================================\n");
 
+    for(int j = 0; j < current_node->num_keys; j++) {
+        if(compareKeys(key, &current_node->keys[j]) == 0) {
+            *result = current_node->rids[j];
             return RC_OK;
         }
-
     }
     return RC_IM_KEY_NOT_FOUND;
-
 }
 
 
@@ -277,14 +304,16 @@ void sortKeys(Value *arr, void **ptr, int size) {
 }
 
 void insertIntoParent(node *parent, Value *key, RID rid) {
-    int numKeys = parent->num_keys;
-    parent->keys[numKeys] = *key;
-    parent->ptrs[numKeys] = (void *)(&rid);
-    sortKeys(parent->keys, parent->ptrs, numKeys);
-    parent->num_keys++;
+    node *new_node = parent;
+    int numKeys = new_node->num_keys;
+    new_node->keys[numKeys] = *key;
+    new_node->ptrs[numKeys] = (void *)(&rid);
+    new_node->rids[numKeys] = rid;
+    sortKeys(new_node->keys, new_node->ptrs, numKeys);
+    new_node->num_keys++;
     printf("Keys:\n");
-    for (int i = 0; i < parent->num_keys; i++) {
-        printf("%d, ", parent->keys[i].v.intV);
+    for (int i = 0; i < new_node->num_keys; i++) {
+        printf("%d, ", new_node->keys[i].v.intV);
     }
     printf("\n");
 }
@@ -301,7 +330,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    current_node->parent = current_node;
+    // current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -320,6 +349,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         int numKeys = current_node->num_keys;
         current_node->keys[numKeys] = *key;
         current_node->ptrs[numKeys] = (void *)(&rid);
+        current_node->rids[numKeys] = (rid);
         if(numKeys + 1 > 1) { // Only sort if we have more than 1 keys
             sortKeys(current_node->keys, current_node->ptrs, numKeys);
         }
@@ -352,6 +382,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     for (int i = mid + 1; i < current_node->num_keys; i++) {
         new_node->keys[i - (mid + 1)] = current_node->keys[i];
         new_node->ptrs[i - (mid + 1)] = current_node->ptrs[i];
+        new_node->rids[i - (mid + 1)] = current_node->rids[i];
         new_node->num_keys++;
         meta_data->entries++;
     }
@@ -361,11 +392,13 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         int insert_pos = new_node->num_keys;
         new_node->keys[insert_pos] = *key;
         new_node->ptrs[insert_pos] = (void *)(&rid);
+        new_node->rids[insert_pos] = (rid);
         new_node->num_keys++;
         meta_data->entries++;
         sortKeys(new_node->keys, new_node->ptrs, new_node->num_keys);
     }
 
+    // We are not deleting entries from current_node->keys, hence limiting num_keys
     current_node->num_keys = mid + 1;
 
     if (current_node->is_root == true) {
@@ -373,7 +406,6 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         meta_data->nodes++;
         new_root->keys[0] = new_node->keys[0];
         new_root->num_keys++;
-        // meta_data->entries++;
         new_root->ptrs[0] = current_node;
         new_root->ptrs[1] = new_node;
 
@@ -387,11 +419,16 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // Infinite loop ho raha hai because we are not handling non-leaf node. If current_node is roo
     // ----------------------------------------------------------------
     else {
-        insertIntoParent(new_node->parent, key, rid);
+        node *temp_node = new_node->parent;
+        int numKeys2 = current_node->num_keys;
+        insertIntoParent(temp_node, key, rid);
         // new_node->parent = current_node->parent; // We're already doing this once above
         // current_node->ptrs[current_node->num_keys] = new_node; // Why? This seems incorrect, we can use next_leaf to point to neighbouring leafs
         // meta_data->entries++; // No need to update entries here, as it was just copied from leaf to the parent/root. entries was already update previously
-        meta_data->root->ptrs[current_node->num_keys] = new_node;
+
+        temp_node->ptrs[numKeys2] = new_node;
+        // new_node->parent->ptrs[current_node->num_keys] = new_node;
+        // meta_data->root->ptrs[current_node->num_keys] = new_node;
         // node *parent_node = (node *) current_node->parent;
         // printf("parent->num_keys: %d\n", parent_node->num_keys);
         // for (int i = 0; i < current_node->parent->num_keys; i++) {
