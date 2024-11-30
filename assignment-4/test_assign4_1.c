@@ -32,7 +32,7 @@ main (void)
   testName = "";
 
   testInsertAndFind();
-  // testDelete();
+  testDelete();
   // testIndexScan();
 
   return 0;

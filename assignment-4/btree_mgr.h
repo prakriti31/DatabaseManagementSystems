@@ -37,6 +37,13 @@ typedef struct metadata {
   node *root; // Root of the tree
 } metaData;
 
+// typedef struct scanMetaData {
+//   int key;
+//   int num_keys;
+//   int order;
+//   node * root;
+// } scanMetaData;
+
 // init and shutdown index manager
 extern RC initIndexManager (void *mgmtData);
 extern RC shutdownIndexManager ();
@@ -61,6 +68,6 @@ extern RC nextEntry (BT_ScanHandle *handle, RID *result);
 extern RC closeTreeScan (BT_ScanHandle *handle);
 
 // debug and test functions
-extern char *printTree (BTreeHandle *tree);
+// extern char *printTree (BTreeHandle *tree);
 
 #endif // BTREE_MGR_H

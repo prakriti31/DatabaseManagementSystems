@@ -1,5 +1,5 @@
 #include "btree_mgr.h"
-
+#include <math.h>
 #include <ctype.h>
 #include "buffer_mgr.h"
 #include "storage_mgr.h"
@@ -9,6 +9,51 @@
 #include <string.h>
 #include <stdio.h>
 
+void printTree(BTreeHandle *tree) {
+    metaData *meta_data = (metaData *)tree->mgmtData;
+    node *current_node = meta_data->root;
+
+    if (current_node == NULL) {
+        printf("Tree is empty\n");
+        return;
+    }
+
+    // Use a queue to do a level-order traversal (breadth-first traversal)
+    node **queue = (node **)malloc(sizeof(node*) * (meta_data->nodes));
+    int front = 0, rear = 0;
+
+    // Enqueue the root node
+    queue[rear++] = current_node;
+
+    // Traverse the tree level by level
+    while (front < rear) {
+        int current_level_size = rear - front;
+        printf("Level %d: ", front);
+
+        // Process each node in the current level
+        for (int i = 0; i < current_level_size; i++) {
+            node *current = queue[front++];
+
+            // Print the keys in the current node
+            printf("Node: ");
+            for (int j = 0; j < current->num_keys; j++) {
+                printf("%d ", current->keys[j].v.intV);
+            }
+            printf("| ");
+
+            // Enqueue the child nodes (if any)
+            if (!current->is_leaf) {
+                for (int j = 0; j <= current->num_keys; j++) {
+                    queue[rear++] = (node *)current->ptrs[j];
+                }
+            }
+        }
+
+        printf("\n");
+    }
+
+    free(queue);
+}
 
 
 RC initIndexManager(void *mgmtData) {
@@ -153,9 +198,6 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-
-
-    // current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -236,6 +278,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->num_keys++;
         meta_data->entries++;
 
+        printTree(tree);
         return RC_OK;
     }
 
@@ -245,7 +288,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     node *new_node = createNode(meta_data->order,true, false);
     meta_data->nodes++;
     new_node->parent = current_node->parent; // Fails if we have one leaf node and another root node // Fixed this by setting the parent of root as the parent itself, may cause recursion related errors??
-
+    current_node->next_leaf = new_node;
     // ----------------------------------------------------------------
     // Add the new key in existing keys array, then sort, then split
     // meta_data->Entries++ karna hai
@@ -296,22 +339,93 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         meta_data->root->ptrs[current_node->num_keys] = new_node;
     }
 
+    printTree(tree);
     return RC_OK;
 }
 
+void deleteKeyValue(node *node, Value *key) {
+    int key_value = key->v.intV;
+    int size = node->num_keys;
+    // Identify the element to be removed (1) and its index
+    int indexToRemove = -1;
+    for (int i = 0; i < size; i++) {
+        if (node->keys[i].v.intV == key_value) {
+            indexToRemove = i;
+            break;
+        }
+    }
+
+    // If the element was found, swap it with the last element
+    if (indexToRemove != -1) {
+        // Swap the keys (values)
+        int temp_key = node->keys[indexToRemove].v.intV;
+        node->keys[indexToRemove].v.intV = node->keys[size - 1].v.intV;
+        node->keys[size - 1].v.intV = temp_key;
+
+        // Swap the pointers
+        void *temp_ptr = node->ptrs[indexToRemove];
+        node->ptrs[indexToRemove] = node->ptrs[size - 1];
+        node->ptrs[size - 1] = temp_ptr;
+
+        // Swap the RIDs (if needed)
+        RID temp_rid = node->rids[indexToRemove];
+        node->rids[indexToRemove] = node->rids[size - 1];
+        node->rids[size - 1] = temp_rid;
+
+        // node->num_keys--;
+    }
+}
+
 RC deleteKey(BTreeHandle *tree, Value *key) {
+    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\nDeleting Key: %d\n", key->v.intV);
+
+    metaData *meta_data = (metaData *)tree->mgmtData;
+    node *current_node = meta_data->root;
+
+    // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
+    while (!current_node->is_leaf) {
+        // Traverse internal nodes, find the correct child pointer to follow
+        int i = 0;
+        while (i < current_node->num_keys && compareKeys(key, &current_node->keys[i]) >= 0) { // compareKeys(k1,k2) - k1>k2 -> return 1 || k1 < k2 -> return -1
+            i++;
+        }
+        current_node = (node *)current_node->ptrs[i];
+    }
+
+    if (current_node->num_keys - 1 >= (int)(floor(current_node->max_keys_per_node+1)/2)) {
+        printf("num_keys: %d\n", current_node->num_keys);
+        deleteKeyValue(current_node, key);
+        current_node->num_keys--;
+        meta_data->entries--;
+        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
+    }
+    else if (current_node->num_keys -1 < (int)(floor(current_node->max_keys_per_node+1)/2)) {
+        printf("num_keys: %d\n", current_node->num_keys);
+        deleteKeyValue(current_node, key);
+        current_node->num_keys--;
+        meta_data->entries--;
+    }
+    printf("num_keys: %d\n", current_node->num_keys);
+    printTree(tree);
+
+    return RC_OK;
  }
 
 // Open a scan on the B+ Tree
 RC openTreeScan(BTreeHandle *tree, BT_ScanHandle **handle) {
+    metaData *meta_data = (metaData *)tree->mgmtData;
+    node *current_node = meta_data->root;
+
+    return RC_OK;
 }
 
 // Get the next entry in the scan
 RC nextEntry(BT_ScanHandle *handle, RID *result) {
+    return RC_OK;
 }
 
 // Close the scan on the B+ Tree
 RC closeTreeScan(BT_ScanHandle *handle) {
-
+    free(handle);
     return RC_OK;
 }
