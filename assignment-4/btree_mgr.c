@@ -222,9 +222,9 @@ void sortKeys(Value *key, void **ptr, int size) {
         for (int j = 0; j < size - i - 1; j++) {
             if (key[j].v.intV > key[j + 1].v.intV) {
                 // Swap the keys
-                int temp_key = key[j].v.intV;
-                key[j].v.intV = key[j + 1].v.intV;
-                key[j + 1].v.intV = temp_key;
+                Value temp_key = key[j];
+                key[j] = key[j + 1];
+                key[j + 1] = temp_key;
 
                 // Swap the pointers
                 void *temp_ptr = ptr[j];
@@ -275,7 +275,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->num_keys++;
         meta_data->entries++;
 
-        sortKeys(current_node->keys, current_node->ptrs, numKeys);
+        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
 
         printTree(tree);
         return RC_OK;
@@ -313,6 +313,42 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         new_node->num_keys++;
         meta_data->entries++;
         sortKeys(new_node->keys, new_node->ptrs, new_node->num_keys);
+    }
+    else {
+        Value *temp_key = (Value *) malloc(sizeof(struct Value) * current_node->max_keys_per_node + 1);
+        void ** temp_ptr = (void **) malloc(sizeof(void *) * (current_node->max_keys_per_node + 2));
+        RID *temp_rid = (RID *) malloc(sizeof(struct RID) * (current_node->max_keys_per_node + 2));
+        for (int i = 0; i < current_node->num_keys; i++) {
+            temp_key[i] = current_node->keys[i];
+            temp_ptr[i] = current_node->ptrs[i];
+            temp_rid[i] = current_node->rids[i];
+        }
+        temp_key[current_node->num_keys] = *key;
+        temp_ptr[current_node->num_keys] = (void *)(&rid);
+        temp_rid[current_node->num_keys] = (rid);
+
+        sortKeys(temp_key, temp_ptr, current_node->num_keys+1);
+
+        for (int i = 0; i < mid + 1; i++) {
+            current_node->keys[i] = temp_key[i];
+            current_node->ptrs[i] = temp_ptr[i];
+            current_node->rids[i] = temp_rid[i];
+        }
+
+        // for (int i = 0; i < current_node->num_keys; i++) {
+        //     printf("Current: %d\n",current_node->keys[i].v.intV);
+        // }
+
+        int insert_pos = new_node->num_keys;
+        new_node->keys[insert_pos] = temp_key[mid + 1];
+        new_node->ptrs[insert_pos] = (void *)(&rid);
+        new_node->rids[insert_pos] = (rid);
+
+        new_node->num_keys++;
+
+        // for (int i = 0; i < new_node->num_keys; i++) {
+        //     printf("New_node: %d\n",new_node->keys[i].v.intV);
+        // }
     }
 
     // We are not deleting entries from current_node->keys, hence limiting num_keys
