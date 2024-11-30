@@ -232,14 +232,28 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 
     // First get the root, as it the starting point for our search
     metaData *meta_data = (metaData *)tree->mgmtData;
+    node *current_node = meta_data->root;
 
-    // Compare keys and root->keys and redirect for traversal
-    int compare_result = compareKeys(key,meta_data->root->keys);
-
-    if(compare_result == -1) {
-        //  
+    current_node->parent = current_node;
+    // 1. Traverse the tree to find the appropriate leaf node
+    while (!current_node->is_leaf) {
+        // Traverse internal nodes, find the correct child pointer to follow
+        int i = 0;
+        while (i < current_node->num_keys && compareKeys(key, &current_node->keys[i]) >= 0) { // compareKeys(k1,k2) - k1>k2 -> return 1 || k1 < k2 -> return -1
+            i++;
+        }
+        current_node = (node *)current_node->ptrs[i];
     }
+    for(int j = 0; j < current_node->num_keys; j++) {
+        if(key->v.intV == current_node->keys[j].v.intV) {
+            *result = *((RID*) current_node->ptrs[j]);
+            // result = (RID*) current_node->ptrs[j];
 
+            return RC_OK;
+        }
+
+    }
+    return RC_IM_KEY_NOT_FOUND;
 
 }
 
