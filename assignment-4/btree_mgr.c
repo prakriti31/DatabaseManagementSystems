@@ -495,6 +495,9 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         printf("%d\n", current_node->keys[k].v.intV);
     }
     // ---------- DEBUGGING ------------- //
+    node *temp_ptr = current_node->next_leaf;
+    current_node->next_leaf = new_node;
+    new_node->next_leaf = temp_ptr;
 
     if (current_node->is_root == true) {
         node *new_root = createNode(meta_data->order,false, true);
@@ -591,13 +594,53 @@ RC deleteKey(BTreeHandle *tree, Value *key) {
 // Open a scan on the B+ Tree
 RC openTreeScan(BTreeHandle *tree, BT_ScanHandle **handle) {
     metaData *meta_data = (metaData *)tree->mgmtData;
-    node *current_node = meta_data->root;
+    *handle = (BT_ScanHandle *)malloc(sizeof(BT_ScanHandle));
+    ScanMetaData *scan_meta_data = (ScanMetaData *) malloc(sizeof(ScanMetaData));
+    (*handle)->tree = tree;
+    (*handle)->mgmtData = meta_data;
 
+    node *current_node = meta_data->root;
+    while(!current_node->is_leaf) {
+        current_node = current_node->ptrs[0];
+    }
+    scan_meta_data->current_node = current_node;
     return RC_OK;
+
 }
 
 // Get the next entry in the scan
 RC nextEntry(BT_ScanHandle *handle, RID *result) {
+
+    ScanMetaData *scan_meta_data = (ScanMetaData *)
+    printf("++++++++++++++++++++++++++++++++++++++++++\n");
+    for(int i=0; i < current_node->num_keys; i++) {
+        printf("%d\n", current_node->keys[i].v.intV);
+    }
+    printf("++++++++++++++++++++++++++++++++++++++++++\n");
+
+
+
+    // metaData *meta_data = (metaData *)handle->tree->mgmtData;
+    // node *current_node = meta_data->root;
+    // while(!current_node->is_leaf) {
+    //     current_node = current_node->ptrs[0];
+    // }
+    //
+    // printf("++++++++++++++++++++++++++++++++++++++++++\n");
+    // for(int i=0; i < current_node->num_keys; i++) {
+    //     printf("%d\n", current_node->keys[i].v.intV);
+    // }
+    // printf("++++++++++++++++++++++++++++++++++++++++++\n");
+    //
+    // int i=0;
+    //
+    // if(result->page == current_node->rids[i].page && result->slot == current_node->rids[i].slot) {
+    //     i++;
+    //     return RC_OK;
+    // }
+    // current_node = current_node->next_leaf;
+
+
     return RC_OK;
 }
 
@@ -606,3 +649,4 @@ RC closeTreeScan(BT_ScanHandle *handle) {
     free(handle);
     return RC_OK;
 }
+
