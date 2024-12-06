@@ -33,7 +33,7 @@ main (void)
 
   testInsertAndFind();
   testDelete();
-  // testIndexScan();
+  testIndexScan();
 
   return 0;
 }
