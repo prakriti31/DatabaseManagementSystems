@@ -278,11 +278,12 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
 
         int numKeys = parent->num_keys;
         parent->keys[numKeys] = *key;
-        parent->ptrs[numKeys+1] = (void *)(&rid);
+        // parent->ptrs[numKeys+1] = (void *)(&rid);
+        parent->ptrs[numKeys+1] = self;
         parent->rids[numKeys] = rid;
         parent->num_keys++;
         sortParentWhenSpace(parent->keys, parent->ptrs, numKeys + 1);
-        meta_data->root->ptrs[current_node->num_keys - 1] = self;
+        // meta_data->root->ptrs[current_node->num_keys] = self;
     }
     else {
         if(parent->max_keys_per_node % 2 == 0) {
