@@ -235,14 +235,145 @@ void sortKeys(Value *key, void **ptr, int size) {
     }
 }
 
-void insertIntoParent(node *parent, Value *key, RID rid) {
-    node *new_node = parent;
-    int numKeys = new_node->num_keys;
-    new_node->keys[numKeys] = *key;
-    new_node->ptrs[numKeys+1] = (void *)(&rid);
-    new_node->rids[numKeys] = rid;
-    new_node->num_keys++;
-    sortKeys(new_node->keys, new_node->ptrs, numKeys);
+void sortParent(Value *key, void **ptr, int size) {
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = 0; j < size - i - 1; j++) {
+            if (key[j].v.intV > key[j + 1].v.intV) {
+
+                Value temp_key = key[j];
+                key[j] = key[j + 1];
+                key[j + 1] = temp_key;
+
+                // ptr swap is a bit diffeent for parent than for leaf nodes
+                void *temp_ptr = ptr[j + 1];
+                ptr[j + 1] = ptr[j + 2];
+                ptr[j + 2] = temp_ptr;
+            }
+        }
+    }
+}
+
+void insertIntoParent(node *parent,node *self, Value *key, RID rid, metaData *meta_data) {
+
+    // When parent has space available
+    if(parent->num_keys < parent->max_keys_per_node) {
+        node *new_node = parent;
+        int numKeys = new_node->num_keys;
+        new_node->keys[numKeys] = *key;
+        new_node->ptrs[numKeys+1] = (void *)(&rid);
+        new_node->rids[numKeys] = rid;
+        new_node->num_keys++;
+        sortParent(new_node->keys, new_node->ptrs, numKeys + 1);
+    }
+    else {
+        if(parent->max_keys_per_node % 2 == 0) {
+            // If order (n) is even, take the mid as your new root
+            // We need to sort first, then swap the values, then create new root with mid
+            Value *temp_key = (Value *) malloc(sizeof(struct Value) * parent->max_keys_per_node + 1);
+            void ** temp_ptr = (void **) malloc(sizeof(void *) * (parent->max_keys_per_node + 2));
+            RID *temp_rid = (RID *) malloc(sizeof(struct RID) * (parent->max_keys_per_node + 2));
+            int local_num_keys = 0;
+            // ---------- DEBUGGING ------------- //
+            printf("\nParent Node before insertion of 1\n");
+            for(int k = 0; k < parent->num_keys; k++) {
+                printf("%d\n", parent->keys[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            for (int i = 0; i < parent->num_keys; i++) {
+                temp_key[i] = parent->keys[i];
+                temp_ptr[i] = parent->ptrs[i];
+                temp_rid[i] = parent->rids[i];
+                local_num_keys += 1;
+            }
+            temp_key[local_num_keys] = self->keys[0];
+            temp_ptr[local_num_keys] = (void *)(&rid);
+            temp_rid[local_num_keys] = (rid);
+            local_num_keys += 1;
+            // ---------- DEBUGGING ------------- //
+            printf("\ntemp_key:\n");
+            for(int k = 0; k < local_num_keys; k++) {
+                printf("%d\n", temp_key[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            // Incorrect key is being sent to the parent here. Need to fix this.
+
+            sortParent(temp_key, temp_ptr, parent->num_keys+1);
+
+            // ---------- DEBUGGING ------------- //
+            printf("\ntemp_key after sorting:\n");
+            for(int k = 0; k < local_num_keys; k++) {
+                printf("%d\n", temp_key[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            int mid = parent->num_keys / 2;
+            for (int i = 0; i < mid + 1; i++) {
+                parent->keys[i] = temp_key[i];
+                parent->ptrs[i] = temp_ptr[i];
+                parent->rids[i] = temp_rid[i];
+            }
+            self->keys[0] = temp_key[mid + 1];
+            self->ptrs[0] = temp_ptr[mid + 1];
+            self->rids[0] = temp_rid[mid + 1];
+
+            // [Parent] [Self]
+            // [13, 17] [23]
+            // We need to split the parent into two halfs now
+
+            node *new_root = createNode(parent->max_keys_per_node, false, true);
+            // Copied parent[last_index] to the new root
+
+            // ---------- DEBUGGING ------------- //
+            printf("\ncurrent_node / parent_node: \n");
+            for(int k = 0; k < parent->num_keys; k++) {
+                printf("%d\n", parent->keys[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            new_root->keys[0] = parent->keys[parent->num_keys - 1];
+            new_root->ptrs[0] = parent->ptrs[parent->num_keys - 1];
+            new_root->rids[0] = parent->rids[parent->num_keys - 1];
+            meta_data->root = new_root;
+            meta_data->root->num_keys++;
+
+            // As the value was 'copied' it still exists in parent, so initialize it to zero
+
+
+            // ---------- DEBUGGING ------------- //
+            printf("\ncurrent_node / parent_node after moving mid value: \n");
+            for(int k = 0; k < parent->num_keys; k++) {
+                printf("%d\n", temp_key[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            // Set the right pointer to self node
+            new_root->ptrs[new_root->num_keys] = self;
+
+            // ---------- DEBUGGING ------------- //
+            printf("\nNew Root: \n");
+            for(int k = 0; k < new_root->num_keys; k++) {
+                printf("%d\n", temp_key[k].v.intV);
+            }
+            // ---------- DEBUGGING ------------- //
+
+            for (int i = 0; i < new_root->num_keys; i++) {
+                printf("Current: %d\n",parent->keys[i].v.intV);
+            }
+
+            // int insert_pos = new_node->num_keys;
+            // new_node->keys[insert_pos] = temp_key[mid + 1];
+            // new_node->ptrs[insert_pos] = (void *)(&rid);
+            // new_node->rids[insert_pos] = (rid);
+            //
+            // new_node->num_keys++;
+
+        }
+        else if(parent->max_keys_per_node % 2 == 1) {
+            // If order (n) is even, take mid+1 as your new root
+        }
+    }
 }
 
 // Insert key into the B+ Tree
@@ -252,7 +383,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
 
-    // current_node->parent = current_node;
+    current_node->parent = current_node;
     // 1. Traverse the tree to find the appropriate leaf node where the key should be inserted
     while (!current_node->is_leaf) {
         // Traverse internal nodes, find the correct child pointer to follow
@@ -314,7 +445,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         meta_data->entries++;
         sortKeys(new_node->keys, new_node->ptrs, new_node->num_keys);
     }
-    else {
+    else { // This is when key < current_node key
         Value *temp_key = (Value *) malloc(sizeof(struct Value) * current_node->max_keys_per_node + 1);
         void ** temp_ptr = (void **) malloc(sizeof(void *) * (current_node->max_keys_per_node + 2));
         RID *temp_rid = (RID *) malloc(sizeof(struct RID) * (current_node->max_keys_per_node + 2));
@@ -372,8 +503,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     // Infinite loop ho raha hai because we are not handling non-leaf node. If current_node is roo
     // ----------------------------------------------------------------
     else {
-        insertIntoParent(new_node->parent, key, rid);
-        meta_data->root->ptrs[current_node->num_keys] = new_node;
+        insertIntoParent(new_node->parent,new_node, key, rid, meta_data);
+        meta_data->root->ptrs[current_node->num_keys - 1] = new_node;
     }
 
     printTree(tree);
