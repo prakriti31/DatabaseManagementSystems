@@ -271,17 +271,18 @@ void sortParentWhenSpace(Value *key, void **ptr, int size) {
     }
 }
 
-void insertIntoParent(node *parent,node *self, Value *key, RID rid, metaData *meta_data) {
+void insertIntoParent(node *parent,node *self, node *current_node, Value *key, RID rid, metaData *meta_data) {
 
     // When parent has space available
     if(parent->num_keys < parent->max_keys_per_node) {
-        node *new_node = parent;
-        int numKeys = new_node->num_keys;
-        new_node->keys[numKeys] = *key;
-        new_node->ptrs[numKeys+1] = (void *)(&rid);
-        new_node->rids[numKeys] = rid;
-        new_node->num_keys++;
-        sortParentWhenSpace(new_node->keys, new_node->ptrs, numKeys + 1);
+
+        int numKeys = parent->num_keys;
+        parent->keys[numKeys] = *key;
+        parent->ptrs[numKeys+1] = (void *)(&rid);
+        parent->rids[numKeys] = rid;
+        parent->num_keys++;
+        sortParentWhenSpace(parent->keys, parent->ptrs, numKeys + 1);
+        meta_data->root->ptrs[current_node->num_keys - 1] = self;
     }
     else {
         if(parent->max_keys_per_node % 2 == 0) {
@@ -475,8 +476,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         new_node->keys[insert_pos] = temp_key[mid + 1];
         new_node->ptrs[insert_pos] = (void *)(&rid);
         new_node->rids[insert_pos] = (rid);
-
         new_node->num_keys++;
+        meta_data->entries++;
 
         // for (int i = 0; i < new_node->num_keys; i++) {
         //     printf("New_node: %d\n",new_node->keys[i].v.intV);
@@ -510,8 +511,8 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
     }
 
     else {
-        insertIntoParent(new_node->parent,new_node, key, rid, meta_data);
-        meta_data->root->ptrs[current_node->num_keys] = new_node;
+        insertIntoParent(new_node->parent,new_node,current_node, key, rid, meta_data);
+        // meta_data->root->ptrs[current_node->num_keys - 1] = new_node;
     }
 
     printTree(tree);
