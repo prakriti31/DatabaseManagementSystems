@@ -38,6 +38,7 @@ void printTree(BTreeHandle *tree) {
             printf("Node: ");
             for (int j = 0; j < current->num_keys; j++) {
                 printf("%d ", current->keys[j].v.intV);
+                printf("(Page and Slot: [%d, %d]) ", current->rids[j].page, current->rids[j].slot);
             }
             printf("| ");
 
@@ -172,7 +173,7 @@ RC getNumNodes(BTreeHandle *tree, int *result) {
 // Get the number of entries in the B+ Tree
 RC getNumEntries(BTreeHandle *tree, int *result) {
     metaData *meta_data = (metaData *)tree->mgmtData;
-    printf("Current Entries: %d\n", meta_data->entries);  // Debugging output (only in DEBUG mode)
+    // printf("Current Entries: %d\n", meta_data->entries);  // Debugging output (only in DEBUG mode)
 
     *result = meta_data->entries;
     return RC_OK;
@@ -217,7 +218,7 @@ RC findKey(BTreeHandle *tree, Value *key, RID *result) {
 }
 
 
-void sortKeys(Value *key, void **ptr, int size) {
+void sortKeys(Value *key, void **ptr, RID * rids, int size) {
     for (int i = 0; i < size - 1; i++) {
         for (int j = 0; j < size - i - 1; j++) {
             if (key[j].v.intV > key[j + 1].v.intV) {
@@ -230,6 +231,11 @@ void sortKeys(Value *key, void **ptr, int size) {
                 void *temp_ptr = ptr[j];
                 ptr[j] = ptr[j + 1];
                 ptr[j + 1] = temp_ptr;
+
+                // Swap the rid
+                RID temp_rid = rids[j];
+                rids[j] = rids[j + 1];
+                rids[j + 1] = temp_rid;
             }
         }
     }
@@ -277,7 +283,7 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
     if(parent->num_keys < parent->max_keys_per_node) {
 
         int numKeys = parent->num_keys;
-        parent->keys[numKeys] = *key;
+        parent->keys[numKeys] = self->keys[numKeys-1];
         // parent->ptrs[numKeys+1] = (void *)(&rid);
         parent->ptrs[numKeys+1] = self;
         parent->rids[numKeys] = rid;
@@ -294,17 +300,17 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
             int local_num_keys = 0;
 
             // ---------- DEBUGGING ------------- //
-            printf("\nSelf Node before insertion 1\n");
-            for(int k = 0; k < self->num_keys; k++) {
-                printf("%d\n", self->keys[k].v.intV);
-            }
+            // printf("\nSelf Node before insertion 1\n");
+            // for(int k = 0; k < self->num_keys; k++) {
+            //     printf("%d\n", self->keys[k].v.intV);
+            // }
             // ---------- DEBUGGING ------------- //
 
             // ---------- DEBUGGING ------------- //
-            printf("\nParent Node before insertion of 1\n");
-            for(int k = 0; k < parent->num_keys; k++) {
-                printf("%d\n", parent->keys[k].v.intV);
-            }
+            // printf("\nParent Node before insertion of 1\n");
+            // for(int k = 0; k < parent->num_keys; k++) {
+            //     printf("%d\n", parent->keys[k].v.intV);
+            // }
             // ---------- DEBUGGING ------------- //
             // temp[0], temp[1] <-- parent[0], parent[1]
             for (int i = 0; i < parent->num_keys; i++) {
@@ -319,10 +325,10 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
             local_num_keys += 1;
 
             // ---------- DEBUGGING ------------- //
-            printf("\ntemp_key:\n");
-            for(int k = 0; k < local_num_keys; k++) {
-                printf("%d\n", temp_key[k].v.intV);
-            }
+            // printf("\ntemp_key:\n");
+            // for(int k = 0; k < local_num_keys; k++) {
+            //     printf("%d\n", temp_key[k].v.intV);
+            // }
             // ---------- DEBUGGING ------------- //
 
             // Incorrect key is being sent to the parent here. Need to fix this.
@@ -330,10 +336,10 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
             sortParent(temp_key, temp_ptr, parent->num_keys+1);
 
             // ---------- DEBUGGING ------------- //
-            printf("\ntemp_key after sorting:\n");
-            for(int k = 0; k < local_num_keys; k++) {
-                printf("%d\n", temp_key[k].v.intV);
-            }
+            // printf("\ntemp_key after sorting:\n");
+            // for(int k = 0; k < local_num_keys; k++) {
+            //     printf("%d\n", temp_key[k].v.intV);
+            // }
             // ---------- DEBUGGING ------------- //
 
             int mid = parent->num_keys / 2;
@@ -381,7 +387,7 @@ void insertIntoParent(node *parent,node *self, node *current_node, Value *key, R
 
 // Insert key into the B+ Tree
 RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
-    printf("Inserting Key: %d\n", key->v.intV);
+    // printf("Inserting Key: %d\n", key->v.intV);
 
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
@@ -409,9 +415,13 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         current_node->num_keys++;
         meta_data->entries++;
 
-        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
+        sortKeys(current_node->keys, current_node->ptrs, current_node->rids, current_node->num_keys);
 
-        printTree(tree);
+        // printTree(tree);
+        // for (int i = 0; i < current_node->num_keys; i++) {
+        //     printf("Page and Slot: %d and %d\n", current_node->rids[i].page, current_node->rids[i].slot);
+        // }
+        // printf("-=-=-=-=-=-=-=-=-=-=-=-=-\n");
         return RC_OK;
     }
 
@@ -435,7 +445,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         new_node->num_keys++;
         meta_data->entries++;
 
-        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
+        sortKeys(current_node->keys, current_node->ptrs, current_node->rids, current_node->num_keys);
     }
 
     if (compareKeys(key, &current_node->keys[mid]) >= 0) {
@@ -446,7 +456,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         new_node->rids[insert_pos] = (rid);
         new_node->num_keys++;
         meta_data->entries++;
-        sortKeys(new_node->keys, new_node->ptrs, new_node->num_keys);
+        sortKeys(new_node->keys, new_node->ptrs, new_node->rids, new_node->num_keys);
     }
     else { // This is when key < current_node key
         Value *temp_key = (Value *) malloc(sizeof(struct Value) * current_node->max_keys_per_node + 1);
@@ -461,7 +471,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         temp_ptr[current_node->num_keys] = (void *)(&rid);
         temp_rid[current_node->num_keys] = (rid);
 
-        sortKeys(temp_key, temp_ptr, current_node->num_keys+1);
+        sortKeys(temp_key, temp_ptr, temp_rid, current_node->num_keys+1);
 
         for (int i = 0; i < mid + 1; i++) {
             current_node->keys[i] = temp_key[i];
@@ -476,7 +486,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         int insert_pos = new_node->num_keys;
         new_node->keys[insert_pos] = temp_key[mid + 1];
         new_node->ptrs[insert_pos] = (void *)(&rid);
-        new_node->rids[insert_pos] = (rid);
+        new_node->rids[insert_pos] = temp_rid[mid + 1];
         new_node->num_keys++;
         meta_data->entries++;
 
@@ -490,11 +500,14 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
 
     // Current node after managing overflow
     // ---------- DEBUGGING ------------- //
-    printf("\nCurrent node after handling overflow insertion 1\n");
-    for(int k = 0; k < current_node->num_keys; k++) {
-        printf("%d\n", current_node->keys[k].v.intV);
-    }
+    // printf("\nCurrent node after handling overflow insertion %d\n", key->v.intV);
+    // for(int k = 0; k < current_node->num_keys; k++) {
+    //     printf("%d\n", current_node->keys[k].v.intV);
+    // }
     // ---------- DEBUGGING ------------- //
+    // if(new_node->keys[new_node->num_keys-1].v.intV < current_node->keys[0].v.intV) {
+    //     new_node->next_leaf = current_node;
+    // }
     node *temp_ptr = current_node->next_leaf;
     current_node->next_leaf = new_node;
     new_node->next_leaf = temp_ptr;
@@ -519,7 +532,7 @@ RC insertKey(BTreeHandle *tree, Value *key, RID rid) {
         // meta_data->root->ptrs[current_node->num_keys - 1] = new_node;
     }
 
-    printTree(tree);
+    // printTree(tree);
     return RC_OK;
 }
 
@@ -557,7 +570,7 @@ void deleteKeyValue(node *node, Value *key) {
 }
 
 RC deleteKey(BTreeHandle *tree, Value *key) {
-    printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\nDeleting Key: %d\n", key->v.intV);
+    // printf("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\nDeleting Key: %d\n", key->v.intV);
 
     metaData *meta_data = (metaData *)tree->mgmtData;
     node *current_node = meta_data->root;
@@ -573,74 +586,75 @@ RC deleteKey(BTreeHandle *tree, Value *key) {
     }
 
     if (current_node->num_keys - 1 >= (int)(floor(current_node->max_keys_per_node+1)/2)) {
-        printf("num_keys: %d\n", current_node->num_keys);
+        // printf("num_keys: %d\n", current_node->num_keys);
         deleteKeyValue(current_node, key);
         current_node->num_keys--;
         meta_data->entries--;
-        sortKeys(current_node->keys, current_node->ptrs, current_node->num_keys);
+        sortKeys(current_node->keys, current_node->ptrs, current_node->rids, current_node->num_keys);
     }
     else if (current_node->num_keys -1 < (int)(floor(current_node->max_keys_per_node+1)/2)) {
-        printf("num_keys: %d\n", current_node->num_keys);
+        // printf("num_keys: %d\n", current_node->num_keys);
         deleteKeyValue(current_node, key);
         current_node->num_keys--;
         meta_data->entries--;
     }
-    printf("num_keys: %d\n", current_node->num_keys);
-    printTree(tree);
+    // printf("num_keys: %d\n", current_node->num_keys);
+    // printTree(tree);
 
     return RC_OK;
  }
 
 // Open a scan on the B+ Tree
 RC openTreeScan(BTreeHandle *tree, BT_ScanHandle **handle) {
+    *handle = (BT_ScanHandle *) malloc(sizeof(BT_ScanHandle));
     metaData *meta_data = (metaData *)tree->mgmtData;
-    *handle = (BT_ScanHandle *)malloc(sizeof(BT_ScanHandle));
-    ScanMetaData *scan_meta_data = (ScanMetaData *) malloc(sizeof(ScanMetaData));
-    (*handle)->tree = tree;
-    (*handle)->mgmtData = meta_data;
+    ScanMetaData *scan_meta_data = (void *) malloc(sizeof(ScanMetaData));
 
     node *current_node = meta_data->root;
     while(!current_node->is_leaf) {
         current_node = current_node->ptrs[0];
     }
-    scan_meta_data->current_node = current_node;
-    return RC_OK;
 
+    scan_meta_data->current_node = current_node;
+    scan_meta_data->keyIndex = 0;
+    (*handle)->mgmtData = scan_meta_data;
+
+    return RC_OK;
 }
 
 // Get the next entry in the scan
 RC nextEntry(BT_ScanHandle *handle, RID *result) {
+    ScanMetaData *scan_meta_data = (ScanMetaData *) handle->mgmtData;
+    node *current_node = scan_meta_data->current_node;
 
-    ScanMetaData *scan_meta_data = (ScanMetaData *)
-    printf("++++++++++++++++++++++++++++++++++++++++++\n");
-    for(int i=0; i < current_node->num_keys; i++) {
-        printf("%d\n", current_node->keys[i].v.intV);
+    // When on last element of last node
+    if(current_node == NULL) {
+        return RC_IM_NO_MORE_ENTRIES;
     }
-    printf("++++++++++++++++++++++++++++++++++++++++++\n");
 
-
-
-    // metaData *meta_data = (metaData *)handle->tree->mgmtData;
-    // node *current_node = meta_data->root;
-    // while(!current_node->is_leaf) {
-    //     current_node = current_node->ptrs[0];
-    // }
-    //
     // printf("++++++++++++++++++++++++++++++++++++++++++\n");
     // for(int i=0; i < current_node->num_keys; i++) {
     //     printf("%d\n", current_node->keys[i].v.intV);
     // }
     // printf("++++++++++++++++++++++++++++++++++++++++++\n");
-    //
-    // int i=0;
-    //
-    // if(result->page == current_node->rids[i].page && result->slot == current_node->rids[i].slot) {
-    //     i++;
-    //     return RC_OK;
-    // }
-    // current_node = current_node->next_leaf;
+    // printf("KeyIndex: %d\n", scan_meta_data->keyIndex);
+    // printf("NumKeys: %d\n", current_node->num_keys);
 
+    // When on last element of node
+    if(scan_meta_data->keyIndex == current_node->num_keys - 1) {
+        result->page = current_node->rids[scan_meta_data->keyIndex].page;
+        result->slot = current_node->rids[scan_meta_data->keyIndex].slot;
+        // printf("Page and Slot: %d and %d\n", result->page, result->slot);
 
+        scan_meta_data->current_node = current_node->next_leaf;
+        scan_meta_data->keyIndex = 0;
+    }
+    else if (scan_meta_data->keyIndex < current_node->num_keys - 1) {
+        result->page = current_node->rids[scan_meta_data->keyIndex].page;
+        result->slot = current_node->rids[scan_meta_data->keyIndex].slot;
+        // printf("Page and Slot: %d and %d\n", result->page, result->slot);
+        scan_meta_data->keyIndex++;
+    }
     return RC_OK;
 }
 

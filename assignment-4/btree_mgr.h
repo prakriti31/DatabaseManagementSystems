@@ -41,6 +41,7 @@ typedef struct metadata {
 
 typedef struct ScanMetaData {
   node *current_node;
+  int keyIndex;
 } ScanMetaData;
 
 // typedef struct scanMetaData {

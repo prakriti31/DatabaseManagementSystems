@@ -225,6 +225,7 @@ testIndexScan (void)
 
   for(iter = 0; iter < 50; iter++)
     {
+    printf("------------------------------------------------------------------------------------------------------------------\n");
       int *permute;
 
       // create permutation
@@ -248,6 +249,7 @@ testIndexScan (void)
       while((rc = nextEntry(sc, &rid)) == RC_OK)
 	    {
 	      RID expRid = insert[i++];
+        // printf("Expected Page and Slot: %d and %d\n", expRid.page, expRid.slot);
 	      ASSERT_EQUALS_RID(expRid, rid, "did we find the correct RID?");
 	    }
       ASSERT_EQUALS_INT(RC_IM_NO_MORE_ENTRIES, rc, "no error returned by scan");
