@@ -16,6 +16,8 @@ typedef struct BT_ScanHandle {
   void *mgmtData;
 } BT_ScanHandle;
 
+
+
 typedef struct node {
   Value * keys; // Array of keys
   RID * rids;
@@ -36,6 +38,11 @@ typedef struct metadata {
   DataType type; // Datatype of the key, Default is DT_INT, extra implementation?
   node *root; // Root of the tree
 } metaData;
+
+typedef struct ScanMetaData {
+  node *current_node;
+  int keyIndex;
+} ScanMetaData;
 
 // typedef struct scanMetaData {
 //   int key;
@@ -69,5 +76,7 @@ extern RC closeTreeScan (BT_ScanHandle *handle);
 
 // debug and test functions
 // extern char *printTree (BTreeHandle *tree);
+
+void printTree(BTreeHandle *tree);
 
 #endif // BTREE_MGR_H
