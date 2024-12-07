@@ -77,4 +77,6 @@ extern RC closeTreeScan (BT_ScanHandle *handle);
 // debug and test functions
 // extern char *printTree (BTreeHandle *tree);
 
+void printTree(BTreeHandle *tree);
+
 #endif // BTREE_MGR_H
